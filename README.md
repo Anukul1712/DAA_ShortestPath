@@ -6,11 +6,11 @@ This repository is a complete, reproducible solution to the problem statement in
 
 - Dataset: **9th DIMACS Implementation Challenge, USA-road-d.NY** (New York road network).
 - Full graph: **264,346 vertices** and **733,846 directed arcs**.
-- Representation: directed weighted adjacency list; arc weights are physical distance in metres.
+- Representation: directed weighted adjacency list; native weights use 0.1-meter distance units.
 - Correctness: Dijkstra and A* returned the **same optimal cost in all 25 measured queries**.
-- Search work: A* examined fewer vertices and edges at every tested size (3.18%-7.85% fewer vertices).
-- Runtime: Dijkstra was faster in this Python implementation because the conservative geometric heuristic saved relatively few expansions but added floating-point work to each queue insertion.
-- Bonus: applying 5x cost to 124 arcs in the middle third of a route changed the route; cost rose from **470,231 m to 477,478 m (+1.54%)**.
+- Search work: A* examined 44.04%-77.73% fewer vertices across the tested sizes.
+- Runtime: A* was faster at every tested size after its heuristic was calibrated in the dataset's native distance units.
+- Bonus: applying 5x cost to 124 arcs in the middle third of a route changed the route; cost rose from **47,023.1 m to 47,747.8 m (+1.54%)**.
 
 ## Repository map
 
@@ -95,11 +95,41 @@ The data downloader is idempotent and prints hashes. The files used for this rep
 | Full records | 733,846 arc records plus 264,346 coordinate records |
 | Vertices | 264,346 road-network locations/intersections |
 | Directed edges | 733,846 feasible directed road movements |
-| Edge weight | Physical endpoint-to-endpoint distance in metres |
+| Edge weight | Integer spatial distance; one stored unit is 0.1 meter |
 | Coordinates | Longitude and latitude stored as signed integers with six implied decimal places |
 | Public status | The challenge download page states that files are public domain unless noted otherwise |
 
-The [official DIMACS format specification](https://www.diag.uniroma1.it/challenge9/format.shtml) defines `p sp n m`, `a U V W`, and `v id X Y`. The [TIGER/Line conversion documentation](https://www.diag.uniroma1.it/challenge9/data/tiger/) states that the distance variant stores spatial distance in metres. The official page also warns that the historical dataset has road-data errors, including some gaps in major roads and bridges; results are algorithmically valid for the supplied graph but are not a modern navigation service.
+The [official DIMACS format specification](https://www.diag.uniroma1.it/challenge9/format.shtml) defines the graph and coordinate records. The [TIGER/Line documentation](https://www.diag.uniroma1.it/challenge9/data/tiger/) identifies the metric as spatial endpoint distance. The downloaded graph uses integer decimeter resolution: for example, `W=803` represents 80.3 meters. The official page also warns that the historical dataset has road-data errors, including some gaps in major roads and bridges; results are algorithmically valid for the supplied graph but are not a modern navigation service.
+
+### How to read the DIMACS records
+
+The graph file contains:
+
+| Record | Field-by-field meaning | Project action |
+|---|---|---|
+| `c ...` | `c` means comment | Ignore it |
+| `p sp n m` | `p` = problem, `sp` = shortest path, `n` = vertices, `m` = directed arcs | Allocate `n+1` adjacency lists and verify `m` arcs |
+| `a U V W` | `a` = arc, `U` = source, `V` = destination, `W` = non-negative native distance | Append `Edge(V,W)` to `adjacency[U]` |
+
+The coordinate file contains:
+
+| Record | Field-by-field meaning | Project action |
+|---|---|---|
+| `p aux sp co n` | auxiliary shortest-path coordinate file with `n` coordinate rows | Validate the coordinate-file declaration |
+| `v ID X Y` | coordinate for vertex `ID`; `X` = longitude and `Y` = latitude with six implied decimals | Store `(X/1e6, Y/1e6)` |
+
+Actual examples:
+
+```text
+p sp 264346 733846
+a 1 2 803
+p aux sp co 264346
+v 1 -73530767 41085396
+```
+
+These records mean that the graph has 264,346 vertices and 733,846 directed arcs; it contains an arc `1 -> 2` with cost 803 native units (80.3 meters); and vertex 1 is located at longitude -73.530767, latitude 41.085396.
+
+An `a U V W` record is directional. A reverse movement exists only if a separate `a V U W2` record is present. Complete file semantics, field explanations, real examples, unit discussion, limitations, and detailed answers to all nine Part A questions are provided in [data/README.md](data/README.md).
 
 Why New York rather than the entire USA graph?
 
@@ -118,7 +148,7 @@ a U V W                -> adjacency[U].append(Edge(to=V, weight=W))
 v ID X Y               -> coordinates[ID] = (X/1e6, Y/1e6)
 ```
 
-Comments are skipped. Files remain gzip-compressed and are streamed as text, so no manual decompression or duplicate raw file is needed. IDs stay 1-based, matching the dataset and making path output directly traceable to raw records. The parser verifies the declared arc count and rejects invalid lines or negative weights.
+Comments are skipped. The downloader provides compressed and extracted files; the parser accepts either form. IDs stay 1-based, matching the dataset and making path output directly traceable to raw records. The parser verifies the declared arc count and rejects invalid lines or negative weights. Native integer distances are preserved for exact arithmetic, while generated output also reports `cost_meters = cost * 0.1`.
 
 ### Full-graph statistics
 
@@ -177,17 +207,18 @@ where `g(v)` is the best known source cost and `h(v)` is straight-line distance 
 The projection is fixed for the graph, so its Euclidean distances obey the triangle inequality. The implementation computes
 
 ```text
-scale = min(1, min over arcs (u,v) of weight(u,v) / projected_distance(u,v))
+scale = min over arcs (u,v) of native_weight(u,v) / projected_distance_meters(u,v)
 h(v) = scale * projected_distance(v, destination)
 ```
 
-Therefore, for every arc `(u,v)`, `h(u) <= w(u,v) + h(v)` by the triangle inequality and the per-edge scale bound. The heuristic is consistent; consistency implies admissibility. The measured scale was `1.0` at all five sizes. A zero heuristic remains a correct fallback when coordinates are absent.
+The scale converts geometric meters into the graph's native 0.1-meter cost units while remaining no larger than any observed edge-cost-to-projected-distance ratio. Therefore, for every arc `(u,v)`, `h(u) <= w(u,v) + h(v)` by the triangle inequality and the per-edge scale bound. The heuristic is consistent; consistency implies admissibility. Measured safe scales ranged from 8.7218 to 9.9610 native units per projected meter across the five samples. A zero heuristic remains a correct fallback when coordinates are absent.
 
 A* has worst-case `O((V+E) log V)` time and `O(V+E)` total storage, but an informative heuristic can reduce the explored subset substantially.
 
 ### Metric definitions
 
-- **Shortest-path cost:** sum of weights on the reconstructed path, in metres.
+- **Native shortest-path cost:** exact sum of integer weights, where one unit is 0.1 meter.
+- **Shortest-path distance:** native cost multiplied by 0.1, reported in meters.
 - **Vertices explored:** vertices removed from the priority queue and settled/expanded.
 - **Edges examined:** outgoing arcs scanned from expanded vertices.
 - **Execution time:** wall-clock time inside the search, measured with `perf_counter_ns`.
@@ -211,32 +242,32 @@ Exact machine-dependent times will vary. Operation counts and optimal costs are 
 
 ### Mean of five queries at every size
 
-| Graph size | Algorithm | Mean cost (m) | Mean vertices explored | Mean edges examined | Mean time (ms) |
-|---:|---|---:|---:|---:|---:|
-| 1,000 | Dijkstra | 34,416.4 | 764.4 | 1,924.8 | 0.445 |
-| 1,000 | A* | 34,416.4 | 704.4 | 1,784.4 | 0.594 |
-| 5,000 | Dijkstra | 138,648.8 | 4,531.0 | 11,086.6 | 2.797 |
-| 5,000 | A* | 138,648.8 | 4,333.2 | 10,627.2 | 4.021 |
-| 10,000 | Dijkstra | 241,135.6 | 8,626.8 | 20,814.4 | 6.325 |
-| 10,000 | A* | 241,135.6 | 8,283.6 | 20,014.0 | 8.886 |
-| 25,000 | Dijkstra | 316,543.2 | 20,878.8 | 52,167.4 | 27.587 |
-| 25,000 | A* | 316,543.2 | 19,638.0 | 49,158.0 | 48.398 |
-| 50,000 | Dijkstra | 482,078.2 | 46,075.8 | 120,559.8 | 107.668 |
-| 50,000 | A* | 482,078.2 | 44,526.4 | 116,729.0 | 130.883 |
+| Graph size | Algorithm | Mean native cost | Mean distance (m) | Mean vertices explored | Mean edges examined | Mean time (ms) |
+|---:|---|---:|---:|---:|---:|---:|
+| 1,000 | Dijkstra | 34,416.4 | 3,441.64 | 764.4 | 1,924.8 | 0.525 |
+| 1,000 | A* | 34,416.4 | 3,441.64 | 170.2 | 445.0 | 0.183 |
+| 5,000 | Dijkstra | 138,648.8 | 13,864.88 | 4,531.0 | 11,086.6 | 3.709 |
+| 5,000 | A* | 138,648.8 | 13,864.88 | 1,257.2 | 3,132.6 | 1.443 |
+| 10,000 | Dijkstra | 241,135.6 | 24,113.56 | 8,626.8 | 20,814.4 | 6.462 |
+| 10,000 | A* | 241,135.6 | 24,113.56 | 4,297.2 | 10,630.0 | 4.865 |
+| 25,000 | Dijkstra | 316,543.2 | 31,654.32 | 20,878.8 | 52,167.4 | 29.842 |
+| 25,000 | A* | 316,543.2 | 31,654.32 | 8,962.4 | 22,695.0 | 29.613 |
+| 50,000 | Dijkstra | 482,078.2 | 48,207.82 | 46,075.8 | 120,559.8 | 103.634 |
+| 50,000 | A* | 482,078.2 | 48,207.82 | 25,784.2 | 67,842.6 | 81.859 |
 
 Full precision is preserved in [`summary_results.csv`](results/tables/summary_results.csv), and individual queries are in [`raw_results.csv`](results/tables/raw_results.csv).
 
 ### Search-space reductions from A*
 
-| Graph size | Fewer vertices | Fewer edges |
-|---:|---:|---:|
-| 1,000 | 7.85% | 7.29% |
-| 5,000 | 4.37% | 4.14% |
-| 10,000 | 3.98% | 3.85% |
-| 25,000 | 5.94% | 5.77% |
-| 50,000 | 3.36% | 3.18% |
+| Graph size | Fewer vertices | Fewer edges | Faster runtime |
+|---:|---:|---:|---:|
+| 1,000 | 77.73% | 76.88% | 65.03% |
+| 5,000 | 72.25% | 71.74% | 61.08% |
+| 10,000 | 50.19% | 48.93% | 24.71% |
+| 25,000 | 57.07% | 56.50% | 0.77% |
+| 50,000 | 44.04% | 43.73% | 21.01% |
 
-The key result is nuanced: A* did less graph work but took longer here. A heap operation in Dijkstra is cheap Python integer/list work; each A* insertion also evaluates a coordinate heuristic and uses floating-point priorities. For these boundary-to-boundary queries, the safe geometric heuristic eliminates only a modest portion of the sparse road graph, so saved expansions do not repay heuristic overhead. In a lower-level implementation, with precomputed heuristics, a stronger landmark heuristic, expensive edge evaluation, or more local queries, the balance may change.
+With the heuristic expressed in the same native cost units as `g(v)`, A* substantially reduces the search space. It was faster at all sizes, although the 25,000-vertex mean was nearly tied because heuristic calculations have their own cost. The operation-count reductions are more portable than wall-clock timings and clearly show the benefit of destination guidance.
 
 ### Plots
 
@@ -262,9 +293,11 @@ Thus selected arcs cost `5d`, while unaffected arcs remain at `d`. The middle th
 |---|---:|
 | Source -> destination | 2,069 -> 13,771 |
 | Congested original-route arcs | 124 |
-| Original cost | 470,231 m |
-| New cost | 477,478 m |
-| Cost increase | 7,247 m (1.54%) |
+| Original native cost | 470,231 units |
+| New native cost | 477,478 units |
+| Original distance | 47,023.1 m |
+| New distance | 47,747.8 m |
+| Distance increase | 724.7 m (1.54%) |
 | Original path length | 373 vertices |
 | New path length | 388 vertices |
 | Route changed | Yes |
@@ -282,7 +315,7 @@ It is a public, real road network with positive physical-distance weights, direc
 
 ### Q2. How was it transformed into a weighted graph?
 
-Each `a U V W` record becomes an `Edge(V,W)` in `adjacency[U]`. Each `v ID X Y` record becomes decimal longitude/latitude. Comments and unused metadata are discarded; original IDs, direction, and distance weights are preserved.
+Each `a U V W` record becomes an `Edge(V,W)` in `adjacency[U]`. Each `v ID X Y` record becomes decimal longitude/latitude. Comments and unused metadata are discarded; original IDs, direction, and native integer distance weights are preserved. One native weight unit is 0.1 meter.
 
 ### Q3. Do Dijkstra and A* produce the same cost?
 
@@ -294,7 +327,7 @@ A* explored fewer at all sizes. Dijkstra orders only by distance already travell
 
 ### Q5. How does time vary with graph size?
 
-Mean time increased with size and query span: Dijkstra rose from 0.445 ms at 1,000 vertices to 107.668 ms at 50,000; A* rose from 0.594 ms to 130.883 ms. Growth is not determined by `V` alone: endpoint position, explored region, degree, heap duplicates, OS scheduling, and cache behavior also matter.
+Mean time increased with size and query span: Dijkstra rose from 0.525 ms at 1,000 vertices to 103.634 ms at 50,000; A* rose from 0.183 ms to 81.859 ms. Growth is not determined by `V` alone: endpoint position, explored region, degree, heap duplicates, OS scheduling, and cache behavior also matter.
 
 ### Q6. What is the effect of graph density?
 
@@ -314,101 +347,10 @@ The graph is directed, IDs are 1-based, files are compressed, coordinates use im
 
 ### Q10. Which algorithm is recommended for large-scale IoV/UAV planning?
 
-For this exact pure-Python distance-routing workload, Dijkstra is the measured latency winner. For production point-to-point routing, A* is the better framework when a stronger inexpensive heuristic or preprocessing (for example ALT landmarks) is available, because it reduces search work and can exploit destination knowledge. Use Dijkstra as a robust baseline/fallback; use A* after verifying that heuristic savings exceed evaluation overhead on the target hardware and query distribution.
+For this point-to-point distance-routing workload, A* is recommended because it returned the same optimal costs while exploring 44.04%-77.73% fewer vertices and running faster at every tested size. Dijkstra remains the essential correctness baseline and a robust choice when coordinates or a safe heuristic are unavailable. Production systems should still benchmark on their own hardware and query distribution.
 
-## 9. Additional viva, review, and defense questions
 
-This section intentionally goes beyond the ten supplied questions.
-
-### Dataset and modelling
-
-**Why use a directed graph?** Roads can be one-way. Treating every arc as undirected could create illegal paths and different costs.
-
-**What does one vertex represent?** A TIGER/Line road-network location/intersection with a geographic coordinate, not a vehicle.
-
-**What does one edge represent?** A permitted movement along a road segment from its tail vertex to its head vertex.
-
-**Why choose distance rather than travel time?** Distance is stable, directly documented in metres, and makes a geometric A* heuristic natural. The same parser works with the official `USA-road-t` time graph, but the heuristic would need a documented maximum-speed lower bound.
-
-**Is this live traffic data?** No. It is a historical static road topology. The bonus simulates dynamic congestion; it does not claim to be live traffic.
-
-**Why not use a manually drawn graph?** It would fail the scale and realism goals and hide parsing, sparsity, reachability, and measurement issues.
-
-**Why are the raw archives ignored by Git?** They are reproducibly downloadable, externally owned data. Avoiding duplication keeps the repository small; hashes provide identity.
-
-**Are parallel edges/self-loops allowed?** The DIMACS format permits them. The algorithms remain correct with non-negative parallel arcs and self-loops.
-
-### Correctness and algorithms
-
-**Why does Dijkstra require non-negative weights?** Once a vertex is settled, the proof assumes no later path through an unsettled vertex can reduce it. A negative edge breaks that invariant.
-
-**Could Bellman-Ford be used?** Yes for negative edges, at `O(VE)`, but it is unnecessary and far slower for positive road distances.
-
-**Why stop when the destination is popped, not first discovered?** Discovery gives only a tentative distance. Popping under the algorithm's ordering establishes optimality.
-
-**How is a path reconstructed?** Every successful relaxation assigns `parent[v]=u`. Starting at the destination, parent links are followed to the source and reversed.
-
-**What if no path exists?** The heap empties without settling the destination. The result reports `reachable=false`, an empty path, and infinite cost.
-
-**What if source equals destination?** Both algorithms return cost 0 and path `[source]`.
-
-**Why use lazy heap deletion?** Python's heap has no efficient decrease-key. Pushing the improved pair and skipping stale pops is simple, correct, and keeps logarithmic heap operations.
-
-**Can A* reopen a vertex?** Yes, the implementation supports reopening after a better `g` value. A consistent heuristic normally makes this unnecessary, but the behavior is robust.
-
-**What happens if `h=0`?** A* becomes Dijkstra, preserving correctness.
-
-**Could an overestimating heuristic be faster?** Possibly, but it can lose optimality. This assignment requires shortest paths, so the implementation uses a proven safe lower bound.
-
-**Why do equal optimal costs not always imply equal paths?** Multiple distinct paths may have the same total cost. Heap tie-breaking and relaxation order can select different but equally optimal paths.
-
-### Representation and complexity
-
-**Why adjacency lists instead of a matrix?** The 264,346^2 matrix has about 69.9 billion cells, almost all empty. Adjacency lists store `O(V+E)` information and enumerate real outgoing arcs directly.
-
-**Why keep 1-based arrays?** It avoids a large ID mapping and makes paths correspond exactly to DIMACS IDs. Index 0 is intentionally unused.
-
-**What dominates memory?** Python edge objects/lists and per-query `distance`, `parent`, and state arrays. A production implementation could use packed integer arrays or C++ structs.
-
-**Is average degree `E/V` or `2E/V`?** For a directed graph, average out-degree and in-degree are each `E/V`; average total degree is `2E/V`. This report states both to remove ambiguity.
-
-**Does A* improve worst-case complexity?** No. Its worst case matches Dijkstra's asymptotic bound. Its benefit is reducing the practical explored subset.
-
-### Experimental validity
-
-**Why use induced subgraphs?** They preserve every original arc between selected vertices and avoid fabricating graph structure or weights.
-
-**Why BFS-prefix sampling?** It creates nested, geographically coherent road regions and exact sizes. Uniform random vertices would usually yield a fragmented graph.
-
-**Does sampling bias results?** Yes. BFS prefixes emphasize one connected region, and boundary-separated pairs are deliberately difficult. Conclusions are scoped to this protocol; raw configuration is exposed for alternative studies.
-
-**Why five query pairs?** It satisfies the assignment minimum while averaging over endpoint variation. A research-grade study should use hundreds or thousands and confidence intervals.
-
-**Why median-of-five timing?** One Python timing can be distorted by scheduling or runtime noise. The median rejects isolated spikes; the final table averages the five per-query medians.
-
-**Why report operation counts as well as time?** Counts are machine-independent evidence of algorithmic work; wall time depends on CPU, interpreter, OS, caches, and background load.
-
-**Why did A* do fewer operations but run slower?** Its heuristic adds projection and floating-point work to each candidate. The 3%-8% scan reduction was too small to offset this overhead in Python.
-
-**How is reproducibility enforced?** Official fixed URLs, SHA-256 hashes, fixed seed, fixed sizes, stored metadata, deterministic sampling, raw CSV rows, explicit dependencies, and a single pipeline command.
-
-**What threats to validity remain?** One city, distance weights only, historical map errors, one Python runtime/hardware environment, five pairs per size, induced-subgraph boundaries, and no memory profiling in the main table.
-
-### Dynamic routing and extensions
-
-**Does the bonus update the graph permanently?** No. A weight callback overlays congestion costs, so the immutable base graph remains reusable.
-
-**Why recompute instead of using a dynamic shortest-path data structure?** The assignment asks to modify costs and recompute. Re-running is simple and correct; frequent real-time updates could justify incremental algorithms.
-
-**Why did a 5x penalty increase total cost by only 1.54%?** The solver found a detour avoiding most penalized arcs. That is precisely the adaptive behavior routing systems need.
-
-**How could the model include UAVs?** Vertices could be 3D waypoints; edges could encode feasible flight segments; weights could combine distance, energy, wind, risk, and no-fly constraints. The algorithms remain valid if weights stay non-negative and the heuristic is a lower bound.
-
-**How could production road routing be faster?** Use packed data structures, bidirectional Dijkstra/A*, contraction hierarchies, ALT landmarks, arc flags, multi-level overlays, and batched/preprocessed queries.
-
-**How would travel-time A* remain admissible?** Divide straight-line distance by a true upper bound on possible speed; never use average speed as a lower-bound time estimate if faster travel is possible.
-
-## 10. Testing and verification evidence
+## 9. Testing and verification evidence
 
 The test suite covers:
 
@@ -421,7 +363,7 @@ The test suite covers:
 Last local result:
 
 ```text
-Ran 5 tests ... OK
+Ran 7 tests ... OK
 ```
 
 The real-data pipeline adds 25 cross-algorithm cost assertions. The final generated artifacts are:
@@ -438,7 +380,7 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`edges_examined.png`](results/plots/edges_examined.png) | edge-work plot |
 | [`dynamic_route_comparison.png`](results/plots/dynamic_route_comparison.png) | geographic bonus-route plot |
 
-## 11. Useful CLI commands
+## 10. Useful CLI commands
 
 After setting `PYTHONPATH=src` (or `$env:PYTHONPATH="src"` in PowerShell):
 
@@ -456,9 +398,9 @@ python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates d
 python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates data/raw/USA-road-d.NY.co.gz dynamic 2069 13771
 ```
 
-## 12. Final conclusion
+## 11. Final conclusion
 
 The project demonstrates more than calling a shortest-path routine: it selects and verifies a public mobility dataset, parses a documented interchange format, models direction and weights explicitly, implements and instruments two algorithms, designs reproducible nested-scale experiments, validates optimality, exposes raw paths/results, visualizes scaling, and shows rerouting under dynamic costs.
 
-The central empirical lesson is that **fewer expansions do not automatically mean lower latency**. A* consistently reduced search work, but its heuristic overhead outweighed that saving in this Python setup. That distinction - algorithmic work versus end-to-end implementation cost - is exactly why real experimental evaluation matters.
+The central empirical lesson is that unit-aware modelling matters. Once the geometric heuristic is calibrated to the dataset's native 0.1-meter weights, A* remains admissible, explores far less of the graph, and improves point-to-point runtime while producing exactly the same optimal cost as Dijkstra.
 

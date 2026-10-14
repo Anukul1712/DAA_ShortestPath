@@ -4,8 +4,8 @@ This folder satisfies submission criteria 5 and 6 and separates machine-readable
 
 ## `tables/`
 
-- `raw_results.csv` - all 50 algorithm/query rows and complete official-ID paths.
-- `summary_results.csv` - averages and median timing by size and algorithm.
+- `raw_results.csv` - all 50 algorithm/query rows, native costs, meter conversions, metrics, and complete official-ID paths.
+- `summary_results.csv` - average native cost, average meters, work metrics, and timing by size and algorithm.
 - `graph_statistics.csv` - vertex, arc, and degree statistics at every size.
 - `metadata.json` - seed, sizes, query count, and timing repetitions.
 

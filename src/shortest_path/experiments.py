@@ -94,6 +94,8 @@ def run_benchmarks(
                     "pair": pair_index,
                     "path_length_vertices": len(result.path),
                     "heuristic_scale": scale,
+                    "weight_unit_meters": subgraph.weight_unit_meters,
+                    "cost_meters": result.cost * subgraph.weight_unit_meters,
                 })
                 path = [original_ids[v] for v in result.path] if original_ids is not None else result.path
                 row["path"] = " ".join(map(str, path))
@@ -130,6 +132,7 @@ def summarize(rows: list[dict]) -> list[dict]:
             "algorithm": algorithm,
             "queries": len(items),
             "average_cost": statistics.fmean(float(x["cost"]) for x in items),
+            "average_cost_meters": statistics.fmean(float(x["cost_meters"]) for x in items),
             "average_vertices_explored": statistics.fmean(int(x["vertices_explored"]) for x in items),
             "average_edges_examined": statistics.fmean(int(x["edges_examined"]) for x in items),
             "average_execution_time_ms": statistics.fmean(float(x["execution_time_ms"]) for x in items),
@@ -170,6 +173,9 @@ def run_dynamic_experiment(
         "congested_edges": len(congested),
         "baseline_cost": baseline.cost,
         "dynamic_cost": updated.cost,
+        "weight_unit_meters": graph.weight_unit_meters,
+        "baseline_cost_meters": baseline.cost * graph.weight_unit_meters,
+        "dynamic_cost_meters": updated.cost * graph.weight_unit_meters,
         "baseline_path": [graph.original_vertex_ids[v] for v in baseline.path] if hasattr(graph, "original_vertex_ids") else baseline.path,
         "dynamic_path": [graph.original_vertex_ids[v] for v in updated.path] if hasattr(graph, "original_vertex_ids") else updated.path,
         "baseline_subgraph_path": baseline.path,

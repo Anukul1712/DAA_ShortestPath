@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import asin, cos, hypot, radians, sin, sqrt
+from math import asin, cos, hypot, inf, radians, sin, sqrt
 from typing import Callable, Iterable
 
 
@@ -27,6 +27,7 @@ class RoadGraph:
         adjacency: list[list[Edge]],
         coordinates: list[tuple[float, float] | None] | None = None,
         name: str = "road-network",
+        weight_unit_meters: float = 1.0,
     ) -> None:
         if not adjacency:
             adjacency = [[]]
@@ -35,6 +36,7 @@ class RoadGraph:
         if len(self.coordinates) < len(adjacency):
             self.coordinates.extend([None] * (len(adjacency) - len(self.coordinates)))
         self.name = name
+        self.weight_unit_meters = weight_unit_meters
         self.edge_count = sum(len(edges) for edges in adjacency)
         known_latitudes = [point[1] for point in self.coordinates if point is not None]
         mean_latitude = sum(known_latitudes) / len(known_latitudes) if known_latitudes else 0.0
@@ -60,6 +62,7 @@ class RoadGraph:
         total_degrees = [out_degrees[v - 1] + indegrees[v] for v in self.vertices()]
         return {
             "name": self.name,
+            "weight_unit_meters": self.weight_unit_meters,
             "vertices": self.vertex_count,
             "directed_edges": self.edge_count,
             "average_out_degree": self.edge_count / self.vertex_count if self.vertex_count else 0.0,
@@ -99,7 +102,12 @@ class RoadGraph:
             u = new_id[old_u]
             adjacency[u] = [Edge(new_id[edge.to], edge.weight) for edge in self.adjacency[old_u] if edge.to in new_id]
             coords[u] = self.coordinates[old_u]
-        subgraph = RoadGraph(adjacency, coords, f"{self.name}-{len(queue)}")
+        subgraph = RoadGraph(
+            adjacency,
+            coords,
+            f"{self.name}-{len(queue)}",
+            weight_unit_meters=self.weight_unit_meters,
+        )
         subgraph.active_vertices = tuple(range(1, len(queue) + 1))
         subgraph.original_vertex_ids = [0, *queue]
         return subgraph
@@ -111,7 +119,7 @@ class RoadGraph:
         Combined with the triangle inequality this makes the heuristic consistent.
         """
 
-        scale = 1.0
+        scale = inf
         found = False
         for u in self.vertices():
             cu = self.coordinates[u]
@@ -125,7 +133,7 @@ class RoadGraph:
                 if straight > 0:
                     scale = min(scale, edge.weight / straight)
                     found = True
-        return max(0.0, min(1.0, scale)) if found else 0.0
+        return max(0.0, scale) if found else 0.0
 
     def geo_heuristic(self, destination: int, scale: float | None = None) -> Callable[[int], float]:
         self.validate_vertex(destination)

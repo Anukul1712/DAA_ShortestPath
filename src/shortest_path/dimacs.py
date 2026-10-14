@@ -41,6 +41,8 @@ def read_dimacs_graph(graph_path: str | Path, coordinate_path: str | Path | None
                 if adjacency is None or len(fields) != 4:
                     raise ValueError(f"invalid arc line at {line_no}: {line.rstrip()}")
                 u, v, weight = map(int, fields[1:])
+                if not (1 <= u < len(adjacency) and 1 <= v < len(adjacency)):
+                    raise ValueError(f"arc vertex outside 1..{len(adjacency) - 1} at line {line_no}")
                 if weight < 0:
                     raise ValueError(f"negative weight at line {line_no}")
                 adjacency[u].append(Edge(v, weight))
@@ -52,14 +54,40 @@ def read_dimacs_graph(graph_path: str | Path, coordinate_path: str | Path | None
 
     coordinates: list[tuple[float, float] | None] = [None] * len(adjacency)
     if coordinate_path:
+        expected_coordinates: int | None = None
+        parsed_coordinates = 0
+        seen_coordinates = bytearray(len(adjacency))
         with _open_text(coordinate_path) as stream:
             for line_no, line in enumerate(stream, 1):
-                if not line or line[0] in {"c", "p", "\n"}:
+                if not line or line[0] in {"c", "\n"}:
                     continue
                 fields = line.split()
+                if fields[0] == "p":
+                    if len(fields) != 5 or fields[1:4] != ["aux", "sp", "co"]:
+                        raise ValueError(f"invalid coordinate problem line at {line_no}: {line.rstrip()}")
+                    expected_coordinates = int(fields[4])
+                    if expected_coordinates != len(adjacency) - 1:
+                        raise ValueError("coordinate and graph vertex counts differ")
+                    continue
                 if fields[0] != "v" or len(fields) != 4:
                     raise ValueError(f"invalid coordinate line at {line_no}: {line.rstrip()}")
                 vertex, lon, lat = map(int, fields[1:])
+                if not 1 <= vertex < len(adjacency):
+                    raise ValueError(f"coordinate vertex outside 1..{len(adjacency) - 1} at line {line_no}")
+                if seen_coordinates[vertex]:
+                    raise ValueError(f"duplicate coordinate for vertex {vertex} at line {line_no}")
+                seen_coordinates[vertex] = 1
                 coordinates[vertex] = (lon / 1_000_000.0, lat / 1_000_000.0)
-    return RoadGraph(adjacency, coordinates, Path(graph_path).stem.replace(".gr", ""))
+                parsed_coordinates += 1
+        if expected_coordinates is None:
+            raise ValueError("DIMACS coordinate file has no 'p aux sp co' problem line")
+        if parsed_coordinates != expected_coordinates:
+            raise ValueError(
+                f"expected {expected_coordinates} coordinates but parsed {parsed_coordinates}"
+            )
+    name = Path(graph_path).stem.replace(".gr", "")
+    # Final USA-road-d Challenge files use integer decimeters (0.1 m) so
+    # distance weights retain one decimal place while remaining integers.
+    weight_unit_meters = 0.1 if name.startswith("USA-road-d.") else 1.0
+    return RoadGraph(adjacency, coordinates, name, weight_unit_meters=weight_unit_meters)
 

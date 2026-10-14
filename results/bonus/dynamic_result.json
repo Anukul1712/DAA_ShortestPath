@@ -9,6 +9,9 @@
   "congested_edges": 124,
   "baseline_cost": 470231.0,
   "dynamic_cost": 477478.0,
+  "weight_unit_meters": 0.1,
+  "baseline_cost_meters": 47023.100000000006,
+  "dynamic_cost_meters": 47747.8,
   "baseline_path": [
     2069,
     2080,

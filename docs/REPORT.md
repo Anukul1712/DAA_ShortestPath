@@ -8,7 +8,7 @@ The project evaluates independently implemented Dijkstra and A* algorithms on a 
 
 ## Dataset and model
 
-The selected dataset is the public 9th DIMACS Implementation Challenge New York distance graph. It contains 264,346 road-network vertices and 733,846 directed arcs. Each arc weight is physical distance in metres. Longitude/latitude coordinates support a destination-aware heuristic.
+The selected dataset is the public 9th DIMACS Implementation Challenge New York distance graph. It contains 264,346 road-network vertices and 733,846 directed arcs. Native integer arc weights have 0.1-meter resolution. Longitude/latitude coordinates support a destination-aware heuristic.
 
 The compressed DIMACS files are streamed into a directed adjacency list. Five nested BFS-prefix induced graphs contain 1,000, 5,000, 10,000, 25,000, and 50,000 vertices. Dense internal IDs make resource use match the sample size, while a reverse map ensures every published path uses official dataset IDs.
 
@@ -25,16 +25,16 @@ Five reachable, non-trivial source-destination pairs are tested at every graph s
 ## Main findings
 
 - Dijkstra and A* agreed on all 25 optimal costs.
-- A* examined 3.18%-7.85% fewer vertices, depending on size.
-- Dijkstra was faster in this Python implementation because the safe heuristic's floating-point overhead exceeded the modest reduction in graph scans.
+- A* examined 44.04%-77.73% fewer vertices, depending on size.
+- A* was faster at every tested size after the heuristic was calibrated to native cost units.
 - Execution time and examined edges increased substantially with graph and query span.
 - Sparse road-network structure strongly favors adjacency lists.
 
-The correct practical conclusion is not that one algorithm always wins. Dijkstra is the measured latency baseline here; A* is preferable when a cheap, strong heuristic or preprocessing scheme reduces enough search work to offset its overhead.
+The practical conclusion is that A* is preferable for these coordinate-equipped point-to-point queries. Dijkstra remains the correctness baseline and fallback when a safe heuristic is unavailable.
 
 ## Bonus result
 
-The middle 124 arcs of one original route received a 5x simulated congestion cost. Recalculation changed the route from 373 to 388 vertices and increased cost from 470,231 m to 477,478 m (+1.54%). The alternative route avoids most of the penalized segment, demonstrating adaptive mobility routing.
+The middle 124 arcs of one original route received a 5x simulated congestion cost. Recalculation changed the route from 373 to 388 vertices and increased distance from 47,023.1 m to 47,747.8 m (+1.54%). The alternative route avoids most of the penalized segment, demonstrating adaptive mobility routing.
 
 ## Limitations
 
