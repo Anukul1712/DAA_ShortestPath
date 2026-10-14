@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "dimacs-mobility-shortest-path"
 version = "1.0.0"
 description = "Reproducible Dijkstra and A* experiments on DIMACS road networks"
-readme = "SOLUTION_README.md"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["matplotlib>=3.8,<4"]
 

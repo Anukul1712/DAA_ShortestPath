@@ -8,14 +8,16 @@ from pathlib import Path
 from .graph import RoadGraph
 
 
-def generate_plots(results_dir: str | Path) -> list[Path]:
+def generate_plots(tables_dir: str | Path, plots_dir: str | Path | None = None) -> list[Path]:
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:
         raise RuntimeError("Install dependencies with: pip install -r requirements.txt") from exc
 
-    folder = Path(results_dir)
-    with (folder / "summary_results.csv").open(newline="", encoding="utf-8") as stream:
+    tables = Path(tables_dir)
+    plots = Path(plots_dir) if plots_dir is not None else tables
+    plots.mkdir(parents=True, exist_ok=True)
+    with (tables / "summary_results.csv").open(newline="", encoding="utf-8") as stream:
         rows = list(csv.DictReader(stream))
     outputs: list[Path] = []
     specs = [
@@ -41,14 +43,18 @@ def generate_plots(results_dir: str | Path) -> list[Path]:
         ax.legend()
         ax.set_title(f"{ylabel}: Dijkstra vs A*")
         fig.tight_layout()
-        path = folder / filename
+        path = plots / filename
         fig.savefig(path)
         plt.close(fig)
         outputs.append(path)
     return outputs
 
 
-def plot_dynamic_routes(graph: RoadGraph, results_dir: str | Path) -> Path:
+def plot_dynamic_routes(
+    graph: RoadGraph,
+    bonus_dir: str | Path,
+    plots_dir: str | Path | None = None,
+) -> Path:
     """Plot the baseline and congestion-aware paths in geographic coordinates."""
 
     import json
@@ -57,8 +63,10 @@ def plot_dynamic_routes(graph: RoadGraph, results_dir: str | Path) -> Path:
     except ImportError as exc:
         raise RuntimeError("Install dependencies with: pip install -r requirements.txt") from exc
 
-    folder = Path(results_dir)
-    report = json.loads((folder / "dynamic_result.json").read_text(encoding="utf-8"))
+    bonus = Path(bonus_dir)
+    plots = Path(plots_dir) if plots_dir is not None else bonus
+    plots.mkdir(parents=True, exist_ok=True)
+    report = json.loads((bonus / "dynamic_result.json").read_text(encoding="utf-8"))
     fig, ax = plt.subplots(figsize=(8, 6), dpi=170)
     for key, label, color, width, alpha in (
         ("baseline_subgraph_path", "Original shortest path", "#D1495B", 3.0, 0.8),
@@ -77,7 +85,7 @@ def plot_dynamic_routes(graph: RoadGraph, results_dir: str | Path) -> Path:
     ax.legend()
     ax.set_aspect("equal", adjustable="datalim")
     fig.tight_layout()
-    destination = folder / "dynamic_route_comparison.png"
+    destination = plots / "dynamic_route_comparison.png"
     fig.savefig(destination)
     plt.close(fig)
     return destination

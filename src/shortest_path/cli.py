@@ -27,11 +27,11 @@ def parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--pairs", type=int, default=5)
     benchmark.add_argument("--seed", type=int, default=2026)
     benchmark.add_argument("--repetitions", type=int, default=3, help="timing repetitions per algorithm/query")
-    benchmark.add_argument("--output", default="results/generated")
+    benchmark.add_argument("--output", default="results", help="results root containing tables/ and plots/")
     dynamic = commands.add_parser("dynamic")
     dynamic.add_argument("source", type=int)
     dynamic.add_argument("destination", type=int)
-    dynamic.add_argument("--output", default="results/generated")
+    dynamic.add_argument("--output", default="results/bonus")
     return root
 
 
@@ -46,8 +46,10 @@ def main() -> None:
         else:
             result = asdict(astar(graph, args.source, args.destination, graph.geo_heuristic(args.destination)))
     elif args.command == "benchmark":
-        _raw, result = run_benchmarks(graph, args.sizes, args.pairs, args.seed, args.output, args.repetitions)
-        generate_plots(args.output)
+        from pathlib import Path
+        output = Path(args.output)
+        _raw, result = run_benchmarks(graph, args.sizes, args.pairs, args.seed, output / "tables", args.repetitions)
+        generate_plots(output / "tables", output / "plots")
     else:
         result = run_dynamic_experiment(graph, args.source, args.destination, args.output)
     print(json.dumps(result, indent=2))
