@@ -1,0 +1,13 @@
+{
+  "seed": 2026,
+  "pairs_per_size": 5,
+  "sizes": [
+    1000,
+    5000,
+    10000,
+    25000,
+    50000
+  ],
+  "dataset": "USA-road-d.NY",
+  "timing_repetitions_per_query": 5
+}
