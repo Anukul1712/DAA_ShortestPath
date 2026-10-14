@@ -506,7 +506,9 @@ The test suite covers:
 - A*/Dijkstra agreement;
 - disconnected destinations;
 - source equals destination;
-- compressed DIMACS graph and coordinate parsing.
+- compressed DIMACS graph and coordinate parsing;
+- zero-heuristic A* equivalence to Dijkstra search work;
+- rejection of invalid negative heuristic weights.
 
 Last local result:
 
