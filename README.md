@@ -33,7 +33,7 @@ This repository is a complete, reproducible solution to the problem statement in
 |   |-- dimacs.py                   streaming .gr/.co/.gz parser
 |   |-- algorithms.py               Dijkstra, A*, metrics, path reconstruction
 |   |-- experiments.py              sampling, benchmarks, CSV/JSON, bonus
-|   |-- visualization.py            four result plots
+|   |-- visualization.py            nine result plots
 |   `-- cli.py                      query/stats/benchmark/dynamic CLI
 |-- tests/                           parser, correctness, and edge-case tests
 `-- results/
@@ -74,7 +74,7 @@ Optional: `python -m pip install -e .` installs the package in editable mode and
 Expected final pipeline message:
 
 ```text
-Wrote 50 raw rows, 10 summary rows, and 4 plots under .../results
+Wrote 50 raw rows, 10 summary rows, and 9 plots under .../results
 ```
 
 The data downloader is idempotent and prints hashes. The files used for this report were:
@@ -269,13 +269,73 @@ Full precision is preserved in [`summary_results.csv`](results/tables/summary_re
 
 With the heuristic expressed in the same native cost units as `g(v)`, A* substantially reduces the search space. It was faster at all sizes, although the 25,000-vertex mean was nearly tied because heuristic calculations have their own cost. The operation-count reductions are more portable than wall-clock timings and clearly show the benefit of destination guidance.
 
-### Plots
+### Plots and detailed interpretation
+
+Each figure is generated directly from the machine-readable files in `results/tables/`. Runtime values describe the recorded machine and run; shortest-path costs and operation counts are deterministic for the fixed graph samples and query pairs.
+
+#### Figure 1 - Mean execution time
 
 ![Runtime comparison](results/plots/runtime_comparison.png)
 
+The horizontal axis is the number of vertices in the induced graph, and the vertical axis is mean search time in milliseconds. Both algorithms become slower as graph size and typical route span grow. Dijkstra increases from 0.525 ms at 1,000 vertices to 103.634 ms at 50,000 vertices. A* increases from 0.183 ms to 81.859 ms over the same range.
+
+A* has the lower mean at every tested size. Its advantage is greatest on the 1,000- and 5,000-vertex graphs. At 25,000 vertices the lines almost meet: 29.842 ms for Dijkstra and 29.613 ms for A*. This does not mean that the algorithms performed the same amount of search work. A* explored 57.07% fewer vertices at that size, but coordinate projection and heuristic evaluation added computation per examined state. Wall-clock measurements are also sensitive to caching, scheduling, and the particular query sample, so operation counts should be considered alongside time.
+
+#### Figure 2 - Mean vertices explored
+
 ![Vertices explored](results/plots/vertices_explored.png)
 
+This graph counts vertices removed from the priority queue and actually expanded. Dijkstra expanded 764.4, 4,531.0, 8,626.8, 20,878.8, and 46,075.8 vertices on average as graph size increased. A* expanded only 170.2, 1,257.2, 4,297.2, 8,962.4, and 25,784.2.
+
+The gap demonstrates the main algorithmic benefit of an informed heuristic. Dijkstra expands vertices according only to distance already travelled and therefore spreads outward from the source. A* also considers an admissible estimate of remaining distance and directs more of its work toward the destination. A* still expands more vertices on larger instances because routes become longer and the straight-line lower bound cannot represent every road turn, obstacle, or direction restriction.
+
+#### Figure 3 - Mean edges examined
+
 ![Edges examined](results/plots/edges_examined.png)
+
+An edge is counted whenever an outgoing arc of an expanded vertex is inspected for relaxation. Dijkstra's mean rises from 1,924.8 examined edges at 1,000 vertices to 120,559.8 at 50,000. A* rises from 445.0 to 67,842.6. The shape closely follows the vertex-exploration graph because this is a sparse road network with a fairly stable average out-degree.
+
+At 50,000 vertices, A* avoided examining 52,717.2 directed edges per query on average. Fewer examinations mean fewer additions, comparisons, possible distance updates, and heap insertions. The figure therefore explains why A* can improve runtime even though every A* state also requires a heuristic calculation.
+
+#### Figure 4 - Percentage reduction in search work
+
+![Search work reduction](results/plots/search_work_reduction.png)
+
+This figure normalizes the operation counts relative to Dijkstra. For a metric `M`, the plotted reduction is `100 * (1 - M_Astar/M_Dijkstra)`. A* reduced expanded vertices by 77.7%, 72.3%, 50.2%, 57.1%, and 44.0% across the five sizes. Edge reductions were nearly identical at 76.9%, 71.7%, 48.9%, 56.5%, and 43.7%.
+
+The close pairing of the two bars at each size confirms that graph degree remains fairly stable: avoiding a vertex also avoids approximately the same proportion of its outgoing arcs. The percentage is not required to decrease monotonically with size because every size uses a different induced graph and five different endpoint pairs. Even the smallest measured reduction, about 44%, is substantial.
+
+#### Figure 5 - Mean runtime speedup
+
+![Runtime speedup](results/plots/runtime_speedup.png)
+
+Speedup is calculated as `mean Dijkstra time / mean A* time`. A value above the dashed `1.0x` line means A* was faster. The measured ratios are 2.86x, 2.57x, 1.33x, 1.01x, and 1.27x for 1,000 through 50,000 vertices.
+
+The graph separates computational savings from percentages: for example, `2.86x` means Dijkstra required about 2.86 times the mean runtime of A*. The near-`1.0x` value at 25,000 vertices shows that fewer expansions do not guarantee a proportional time improvement. Heuristic calculations, heap behavior, memory locality, and short benchmark duration can offset some saved relaxations. The result supports A* for this workload, while also showing why runtime must be measured rather than inferred only from asymptotic complexity.
+
+#### Figure 6 - Runtime of every query
+
+![Per-query runtime](results/plots/per_query_runtime.png)
+
+Each panel contains the five deterministic source-destination pairs for one graph size. The red bar is Dijkstra and the blue bar is A*. Each panel has its own vertical scale so that small runtimes remain visible; absolute bar heights must therefore be compared only within the same panel or by reading its axis.
+
+The figure exposes variation hidden by the averages. A* is much faster for many queries, particularly on the smaller graphs, but it is slower for some individual cases, such as query 3 at 25,000 vertices. This is expected: heuristic effectiveness depends on route geometry and obstacles, while timing also includes fixed heuristic overhead and ordinary system noise. The recommendation is therefore based on all five queries per size and on operation counts, not on a single favorable run. Each displayed value is itself the median of five executions of that algorithm/query combination.
+
+#### Figure 7 - Optimal-cost agreement
+
+![Cost agreement](results/plots/cost_agreement.png)
+
+The horizontal axis gives Dijkstra's route cost in kilometers and the vertical axis gives A*'s cost for the identical query. Every one of the 25 markers lies on the dashed equality line `y=x`. Consequently, both implementations returned exactly the same native integer cost for every measured pair, ranging from short routes of only a few kilometers to routes longer than 50 km.
+
+This is the central correctness check for A*. Lower runtime or fewer explored vertices would not be useful if optimality were lost. Agreement is expected because all weights are non-negative, Dijkstra is exact, and the calibrated A* heuristic is consistent. The pipeline checks equality before writing results and stops if any pair differs.
+
+#### Figure 8 - Graph scaling and sparsity
+
+![Graph scaling](results/plots/graph_scaling.png)
+
+The left panel plots directed edges against vertices. Edge count grows from 2,438 at 1,000 vertices to 130,522 at 50,000 vertices and remains approximately linear. The right panel shows average out-degree values of 2.44, 2.43, 2.40, 2.49, and 2.61. These values remain within a narrow range even while vertex count increases fiftyfold.
+
+This structure is characteristic of road networks: an intersection connects to only a few nearby roads rather than to every other intersection. Therefore `E` is approximately proportional to `V`, adjacency lists store the graph efficiently, and the practical heap-based complexity is close to `O(V log V)` for searches that explore a large fraction of a sample. The modest rise at 50,000 vertices reflects the particular BFS-induced region, not a transition to a dense graph.
 
 ## 7. Bonus: dynamic edge costs
 
@@ -303,51 +363,86 @@ Thus selected arcs cost `5d`, while unaffected arcs remain at `d`. The middle th
 | Route changed | Yes |
 | Shared directed path edges | 168 |
 
+#### Figure 9 - Route before and after congestion
+
 ![Dynamic route comparison](results/plots/dynamic_route_comparison.png)
 
-The new route deliberately accepts a slightly larger uncongested distance to avoid the heavily penalized central segment. The exact paths and parameters are in [`dynamic_result.json`](results/bonus/dynamic_result.json).
+The red line is the original distance-optimal route and the blue line is the route after dynamic penalties are applied. `S` and `D` identify the same source and destination in both searches. Shared portions can visually overlap, while separated portions show where rerouting occurred.
+
+The original route used 373 vertices and cost 470,231 native units, or 47,023.1 meters. Penalizing 124 arcs in its middle third caused the recomputed route to use 388 vertices and cost 477,478 native units, or 47,747.8 meters. The route therefore changed and accepted 724.7 meters of additional base distance, a 1.54% increase, to avoid edges whose dynamic cost had become five times their normal distance cost. The two paths retained 168 shared directed edges, which shows that the algorithm preserved useful unaffected sections and changed only the portion where an alternative was beneficial.
+
+The result demonstrates the intended IoV interpretation: when congestion or another live condition changes edge costs, the best route may change even though the road topology and endpoints remain fixed. Recomputing from the current cost function produces the new optimum. The exact paths, modified arcs, and parameters are in [`dynamic_result.json`](results/bonus/dynamic_result.json).
 
 ## 8. Answers to the ten assignment questions (Part F)
 
 ### Q1. Why is this dataset suitable?
 
-It is a public, real road network with positive physical-distance weights, directionality, coordinates, and 264,346 vertices - large enough for realistic sparse-graph behavior and every requested experiment size. Vertices, arcs, and weights map directly to IoV routing.
+The `USA-road-d.NY` dataset is suitable because it is public, real, directed, weighted, geographic, and substantially larger than the maximum requested experiment. Its 264,346 vertices and 733,846 arcs allow samples of 1,000 through 50,000 vertices without duplicating synthetic structures. Vertices represent road-network locations, directed arcs represent permitted movements, and positive distance weights directly define the shortest-path objective.
+
+It is especially appropriate for IoV routing because vehicles move through a sparse spatial network rather than a dense arbitrary graph. Coordinates allow a meaningful A* heuristic, while directionality captures cases where travel from `U` to `V` does not imply identical travel from `V` to `U`. New York was chosen instead of the full-USA graph because it preserves these properties while keeping download, memory, and experiment time practical for repeatable evaluation on an ordinary computer.
 
 ### Q2. How was it transformed into a weighted graph?
 
-Each `a U V W` record becomes an `Edge(V,W)` in `adjacency[U]`. Each `v ID X Y` record becomes decimal longitude/latitude. Comments and unused metadata are discarded; original IDs, direction, and native integer distance weights are preserved. One native weight unit is 0.1 meter.
+The parser first reads `p sp n m`, allocates `n+1` adjacency lists, and retains index 0 as unused so that array indexes match the official 1-based vertex IDs. Every `a U V W` line appends `Edge(to=V, weight=W)` to `adjacency[U]`. No reverse edge is invented; a reverse movement exists only when the file contains its own `a V U W2` record. Every `v ID X Y` line is stored as `(X/1,000,000, Y/1,000,000)`, producing decimal longitude and latitude.
+
+Comments are ignored, but structural declarations are validated. Vertex ranges, non-negative weights, coordinate IDs, duplicate coordinates, and declared record counts are checked. Native integer weights are preserved for exact shortest-path comparisons; one native unit equals 0.1 meter, so presentation output also reports `cost_meters = native_cost * 0.1`. For each requested size, a connected BFS prefix is selected and converted into an induced subgraph containing only edges with both endpoints selected. Internal dense IDs improve array efficiency, while a reverse map restores official IDs in every reported path.
 
 ### Q3. Do Dijkstra and A* produce the same cost?
 
-Yes, on all 25 queries. Both optimize the same non-negative weights. Dijkstra is optimal by settled-distance order. A* is optimal because its heuristic is consistent/admissible. The pipeline asserts equality and aborts on any mismatch.
+Yes. Dijkstra and A* produced exactly the same native integer shortest-path cost for all 25 source-destination pairs. The equality is visible in Figure 7, where every point lies on `y=x`, and is enforced programmatically before result files are written.
+
+Dijkstra is optimal because all edge weights are non-negative and a vertex is settled only when it has the minimum tentative distance. A* uses the same relaxation rule but changes priority from `g(v)` to `g(v)+h(v)`. The calibrated heuristic is consistent, so a settled destination has an optimal cost. The two algorithms are not required to return an identical vertex sequence when several equal-cost routes exist; the required and verified property is identical minimum cost.
 
 ### Q4. Which explores fewer vertices, and why?
 
-A* explored fewer at all sizes. Dijkstra orders only by distance already travelled, so it expands broadly around the source. A* adds a lower bound to the goal and preferentially expands promising directions.
+A* explored fewer vertices at every graph size. Its reductions relative to Dijkstra were 77.73%, 72.25%, 50.19%, 57.07%, and 44.04% from the smallest to the largest sample. Edge-examination reductions followed almost the same pattern.
+
+Dijkstra uses only `g(v)`, the known distance from the source, and therefore expands a broad wavefront that includes many vertices in directions unrelated to the destination. A* adds `h(v)`, a lower bound on remaining cost, so vertices that are both cheap to reach and geographically promising receive priority. The heuristic never overestimates under the calibrated model, so this guidance reduces unnecessary work without sacrificing optimality. The amount saved varies by query because straight-line direction is more informative for some road layouts and endpoint pairs than for others.
 
 ### Q5. How does time vary with graph size?
 
-Mean time increased with size and query span: Dijkstra rose from 0.525 ms at 1,000 vertices to 103.634 ms at 50,000; A* rose from 0.183 ms to 81.859 ms. Growth is not determined by `V` alone: endpoint position, explored region, degree, heap duplicates, OS scheduling, and cache behavior also matter.
+Mean runtime generally increased with graph size and route span. Dijkstra rose from 0.525 ms at 1,000 vertices to 103.634 ms at 50,000 vertices, while A* rose from 0.183 ms to 81.859 ms. This increase is expected because larger searches can settle more vertices, scan more arcs, and perform more heap operations.
+
+The growth is not a simple constant multiple of `V`. Runtime depends on the portion of the graph needed to reach the destination, average degree in that region, heap duplicates created by improved tentative distances, memory-cache behavior, and operating-system scheduling. The per-query graph shows meaningful variation even within a fixed size. A* was faster on the mean at every size, but its advantage narrowed at 25,000 vertices because heuristic computation offset much of the saved search work in those five queries.
 
 ### Q6. What is the effect of graph density?
 
-More outgoing arcs cause more relaxations per expanded vertex. With adjacency lists and a heap, cost is `O((V+E) log V)`, so increasing `E` directly raises scan work and may increase heap updates. This road network is sparse (full-graph average out-degree 2.776), which strongly favors adjacency lists over an `O(V^2)` matrix.
+Density determines how many outgoing edges must be examined whenever a vertex is expanded. If average degree rises, each expansion performs more relaxation tests and can create more priority-queue updates. With an adjacency list and binary heap, time is `O((V+E) log V)`, so increasing `E` directly raises computation even when `V` is unchanged.
+
+This road network is sparse: the full graph has average out-degree 2.7761, and the experiment samples remain near 2.4-2.6. Consequently, `E` grows approximately linearly with `V`, as Figure 8 shows. An adjacency list stores only real arcs in `O(V+E)` space and allows the algorithm to scan only actual neighbors. An adjacency matrix would require `O(V^2)` memory and would waste work checking mostly absent edges, making it unsuitable at these sizes.
 
 ### Q7. What is Dijkstra's theoretical complexity?
 
-With a binary heap and adjacency list: `O((V+E) log V)` time and `O(V+E)` total storage including the graph. The auxiliary search state is `O(V)` plus heap entries. On a connected sparse graph, the time is usually stated as `O(E log V)`.
+The implementation uses an adjacency list and Python's binary min-heap. Each reachable vertex can be settled once, every outgoing edge from a settled vertex is scanned once, and heap insertion or removal costs `O(log V)` in the standard bound. The resulting time complexity is `O((V+E) log V)`. For a connected graph, `E` is at least proportional to `V`, so this is commonly simplified to `O(E log V)`.
+
+The graph itself requires `O(V+E)` space. The distance, parent, and settled structures require `O(V)` auxiliary space. Lazy deletion can leave stale priority-queue records in the heap, so the heap may temporarily contain multiple records for a vertex; this does not change the standard `O(E log V)` time bound. For this sparse road network where `E` is approximately proportional to `V`, practical scaling is near `O(V log V)` when most of a sample is explored.
 
 ### Q8. Which A* heuristic is used; is it admissible/consistent?
 
-A fixed equirectangular projection estimates straight-line distance, multiplied by a global scale no greater than `weight(u,v)/projected_distance(u,v)` for every arc. The projection's Euclidean metric obeys the triangle inequality, and calibration makes the edge consistency condition hold. It is therefore consistent and admissible. Missing coordinates fall back to zero.
+The heuristic is straight-line distance to the destination in a fixed local equirectangular projection. Projection is needed because raw longitude and latitude are angular coordinates, not planar meters. The geometric distance is multiplied by a global safe scale computed as the minimum observed ratio `native_edge_weight/projected_edge_length` over usable arcs. This also converts meters into the graph's native 0.1-meter cost units.
+
+For every arc `(u,v)`, calibration guarantees that the scaled geometric length from `u` to `v` is no larger than `w(u,v)`. The projected Euclidean metric obeys the triangle inequality, so `h(u) <= w(u,v) + h(v)`. This is the consistency condition. A consistent heuristic is also admissible, meaning it never overestimates the remaining optimal cost. Therefore A* keeps its optimality guarantee. If coordinates are missing or no safe positive scale is available, the implementation uses `h=0`, which reduces A* to Dijkstra and remains correct.
 
 ### Q9. What conversion difficulties arose?
 
-The graph is directed, IDs are 1-based, files are compressed, coordinates use implied six-decimal precision, the declared edge count must be validated, and induced samples can create unreachable directed pairs. The implementation streams gzip, preserves IDs, validates counts/weights, retains only induced edges, tests reachability, and records historical-data limitations.
+Several format and modelling issues required explicit handling:
+
+- The graph is directed, so reverse arcs cannot be assumed.
+- Vertex IDs are 1-based and must remain traceable to the official files.
+- Graph and coordinate data are separate and may be compressed or extracted.
+- Coordinates are signed integers with six implied decimal places.
+- Distance weights use decimeters, not meters, despite being stored as plain integers.
+- Header counts, ID ranges, duplicate coordinates, and non-negative weights must be validated.
+- An induced directed subgraph can contain unreachable source-destination pairs even when vertices were discovered from one BFS seed.
+- The historical TIGER-derived data contains known road gaps and is not equivalent to a modern live navigation map.
+
+The implementation addresses these issues through streaming plain/gzip input, strict validation, explicit unit metadata, direction-preserving adjacency lists, reachability-aware deterministic pair selection, internal-to-official ID mapping, and clear documentation of dataset limitations.
 
 ### Q10. Which algorithm is recommended for large-scale IoV/UAV planning?
 
-For this point-to-point distance-routing workload, A* is recommended because it returned the same optimal costs while exploring 44.04%-77.73% fewer vertices and running faster at every tested size. Dijkstra remains the essential correctness baseline and a robust choice when coordinates or a safe heuristic are unavailable. Production systems should still benchmark on their own hardware and query distribution.
+For point-to-point routing on this geographic network, A* is recommended. It returned the same optimal cost as Dijkstra in all 25 queries, explored 44.04%-77.73% fewer vertices, examined 43.73%-76.88% fewer edges, and had a lower mean runtime at every tested size. It is particularly appropriate when a destination is known and reliable coordinates support a safe heuristic.
+
+Dijkstra remains important as a reference implementation, a correctness oracle, and a fallback when coordinates are missing or when no admissible heuristic can be justified. It can also be preferable when distances from one source to many or all destinations are required, since A* is primarily goal-directed. For a production IoV or UAV system, the decision should additionally consider live cost updates, preprocessing options, repeated-query patterns, hardware, and the actual distribution of routes. Under the specific single-pair distance-routing conditions tested here, the evidence favors A*.
 
 
 ## 9. Testing and verification evidence
@@ -378,6 +473,11 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`runtime_comparison.png`](results/plots/runtime_comparison.png) | timing plot |
 | [`vertices_explored.png`](results/plots/vertices_explored.png) | vertex-work plot |
 | [`edges_examined.png`](results/plots/edges_examined.png) | edge-work plot |
+| [`search_work_reduction.png`](results/plots/search_work_reduction.png) | A* vertex and edge reduction percentages |
+| [`runtime_speedup.png`](results/plots/runtime_speedup.png) | Dijkstra-to-A* mean runtime ratio |
+| [`per_query_runtime.png`](results/plots/per_query_runtime.png) | all 25 measured query comparisons |
+| [`cost_agreement.png`](results/plots/cost_agreement.png) | shortest-path correctness agreement |
+| [`graph_scaling.png`](results/plots/graph_scaling.png) | edge growth and average degree |
 | [`dynamic_route_comparison.png`](results/plots/dynamic_route_comparison.png) | geographic bonus-route plot |
 
 ## 10. Useful CLI commands

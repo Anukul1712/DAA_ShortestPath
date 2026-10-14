@@ -14,6 +14,11 @@ This folder satisfies submission criteria 5 and 6 and separates machine-readable
 - `runtime_comparison.png`
 - `vertices_explored.png`
 - `edges_examined.png`
+- `search_work_reduction.png` - percentage of Dijkstra's search work avoided by A*.
+- `runtime_speedup.png` - mean Dijkstra runtime divided by mean A* runtime.
+- `per_query_runtime.png` - side-by-side timings for every one of the 25 query pairs.
+- `cost_agreement.png` - Dijkstra and A* distance agreement for all query pairs.
+- `graph_scaling.png` - directed-edge growth and average out-degree by graph size.
 - `dynamic_route_comparison.png`
 
 ## `bonus/`
