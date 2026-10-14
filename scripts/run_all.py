@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from shortest_path.dimacs import read_dimacs_graph
-from shortest_path.experiments import run_benchmarks, run_dynamic_experiment
-from shortest_path.visualization import generate_plots, plot_dynamic_routes
+from shortest_path.experiments import run_benchmarks, run_dynamic_experiment, run_heuristic_study
+from shortest_path.visualization import generate_heuristic_study_plots, generate_plots, plot_dynamic_routes
 
 
 def main() -> None:
@@ -24,7 +24,12 @@ def main() -> None:
     chosen = max(largest, key=lambda row: row["path_length_vertices"])
     subgraph = graph.bfs_induced_subgraph(50000, seed=1)
     run_dynamic_experiment(subgraph, chosen["subgraph_source"], chosen["subgraph_destination"], bonus)
+    run_heuristic_study(
+        graph, [1000, 5000, 10000, 25000, 50000], 5, 2026, tables,
+        timing_repetitions=5,
+    )
     paths = generate_plots(tables, plots)
+    paths.extend(generate_heuristic_study_plots(tables, plots))
     paths.append(plot_dynamic_routes(subgraph, bonus, plots))
     print(f"Wrote {len(rows)} raw rows, {len(summary)} summary rows, and {len(paths)} plots under {ROOT / 'results'}")
 

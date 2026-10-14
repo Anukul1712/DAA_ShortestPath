@@ -8,6 +8,9 @@ This folder satisfies submission criteria 5 and 6 and separates machine-readable
 - `summary_results.csv` - average native cost, average meters, work metrics, and timing by size and algorithm.
 - `graph_statistics.csv` - vertex, arc, and degree statistics at every size.
 - `metadata.json` - seed, sizes, query count, and timing repetitions.
+- `heuristic_study_raw.csv` - all 200 combinations of graph size, query, and heuristic weight.
+- `heuristic_study_summary.csv` - optimality, work, and runtime summarized by size and weight.
+- `heuristic_study_metadata.json` - tested weights and reproducibility parameters.
 
 ## `plots/`
 
@@ -19,6 +22,9 @@ This folder satisfies submission criteria 5 and 6 and separates machine-readable
 - `per_query_runtime.png` - side-by-side timings for every one of the 25 query pairs.
 - `cost_agreement.png` - Dijkstra and A* distance agreement for all query pairs.
 - `graph_scaling.png` - directed-edge growth and average out-degree by graph size.
+- `heuristic_strength_vertices.png` - search work as heuristic strength changes.
+- `heuristic_strength_runtime.png` - runtime response to heuristic strength.
+- `heuristic_tradeoff.png` - solution-quality and efficiency tradeoff.
 - `dynamic_route_comparison.png`
 
 ## `bonus/`
@@ -29,5 +35,11 @@ All artifacts are regenerated with:
 
 ```bash
 python scripts/run_all.py
+```
+
+Run only the parameter study with:
+
+```bash
+python scripts/run_heuristic_study.py
 ```
 

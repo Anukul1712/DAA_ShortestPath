@@ -256,3 +256,113 @@ def plot_dynamic_routes(
     plt.close(fig)
     return destination
 
+
+def generate_heuristic_study_plots(
+    tables_dir: str | Path,
+    plots_dir: str | Path | None = None,
+) -> list[Path]:
+    """Plot the effect of scaling the admissible A* heuristic."""
+
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise RuntimeError("Install dependencies with: pip install -r requirements.txt") from exc
+
+    tables = Path(tables_dir)
+    plots = Path(plots_dir) if plots_dir is not None else tables
+    plots.mkdir(parents=True, exist_ok=True)
+    with (tables / "heuristic_study_summary.csv").open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    sizes = sorted({int(row["graph_size"]) for row in rows})
+    weights = sorted({float(row["heuristic_weight"]) for row in rows})
+    by_key = {(int(row["graph_size"]), float(row["heuristic_weight"])): row for row in rows}
+    palette = ["#003F5C", "#2F4B7C", "#665191", "#A05195", "#D45087"]
+    outputs: list[Path] = []
+
+    for field, ylabel, title, filename in (
+        (
+            "vertices_percent_of_zero",
+            "Vertices explored (% of zero heuristic)",
+            "Stronger heuristics reduce A* search work",
+            "heuristic_strength_vertices.png",
+        ),
+        (
+            "runtime_percent_of_zero",
+            "Runtime (% of zero heuristic)",
+            "Runtime response to heuristic strength",
+            "heuristic_strength_runtime.png",
+        ),
+    ):
+        fig, ax = plt.subplots(figsize=(9, 5.5), dpi=170)
+        for color, size in zip(palette, sizes):
+            ax.plot(
+                weights,
+                [float(by_key[(size, weight)][field]) for weight in weights],
+                marker="o",
+                linewidth=2,
+                color=color,
+                label=f"{size:,} vertices",
+            )
+        ax.axvline(1.0, color="#222222", linestyle="--", linewidth=1.2, label="Standard A*")
+        ax.axhline(100.0, color="#777777", linestyle=":", linewidth=1.0)
+        ax.axvspan(1.0, max(weights), color="#EDAE49", alpha=0.12, label="Weighted A*: no exact guarantee")
+        ax.set_xlabel("Heuristic weight lambda")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.set_xticks(weights)
+        ax.grid(alpha=0.22)
+        ax.legend(fontsize=8, ncol=2)
+        fig.tight_layout()
+        path = plots / filename
+        fig.savefig(path)
+        plt.close(fig)
+        outputs.append(path)
+
+    aggregate = []
+    for weight in weights:
+        selected = [row for row in rows if float(row["heuristic_weight"]) == weight]
+        aggregate.append({
+            "weight": weight,
+            "optimality_rate": sum(float(row["optimality_rate_percent"]) for row in selected) / len(selected),
+            "maximum_gap": max(float(row["maximum_optimality_gap_percent"]) for row in selected),
+            "vertices_percent": sum(float(row["vertices_percent_of_zero"]) for row in selected) / len(selected),
+            "runtime_percent": sum(float(row["runtime_percent_of_zero"]) for row in selected) / len(selected),
+        })
+    fig, (ax_quality, ax_work) = plt.subplots(1, 2, figsize=(12, 5), dpi=170)
+    ax_quality.plot(weights, [row["optimality_rate"] for row in aggregate], marker="o",
+                    color="#00798C", linewidth=2.2, label="Optimal queries (%)")
+    ax_quality.set_xlabel("Heuristic weight lambda")
+    ax_quality.set_ylabel("Optimal queries (%)")
+    ax_quality.set_ylim(0, 105)
+    ax_quality.set_title("Solution quality")
+    ax_quality.grid(alpha=0.22)
+    gap_axis = ax_quality.twinx()
+    gap_axis.plot(weights, [row["maximum_gap"] for row in aggregate], marker="s",
+                  color="#D1495B", linewidth=1.8, label="Maximum cost gap (%)")
+    gap_axis.set_ylabel("Maximum cost gap (%)")
+    lines_a, labels_a = ax_quality.get_legend_handles_labels()
+    lines_b, labels_b = gap_axis.get_legend_handles_labels()
+    ax_quality.legend(lines_a + lines_b, labels_a + labels_b, loc="lower left", fontsize=8)
+
+    ax_work.plot(weights, [row["vertices_percent"] for row in aggregate], marker="o",
+                 color="#003F5C", linewidth=2.2, label="Vertices explored")
+    ax_work.plot(weights, [row["runtime_percent"] for row in aggregate], marker="s",
+                 color="#7A5195", linewidth=2.2, label="Runtime")
+    ax_work.axhline(100.0, color="#777777", linestyle=":", linewidth=1.0)
+    ax_work.set_xlabel("Heuristic weight lambda")
+    ax_work.set_ylabel("Mean across sizes (% of zero heuristic)")
+    ax_work.set_title("Efficiency tradeoff")
+    ax_work.grid(alpha=0.22)
+    ax_work.legend(fontsize=8)
+    for axis in (ax_quality, ax_work):
+        axis.axvline(1.0, color="#222222", linestyle="--", linewidth=1.1)
+        axis.axvspan(1.0, max(weights), color="#EDAE49", alpha=0.12)
+        axis.set_xticks(weights)
+    fig.suptitle("Heuristic strength: efficiency versus optimality", fontsize=14)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    path = plots / "heuristic_tradeoff.png"
+    fig.savefig(path)
+    plt.close(fig)
+    outputs.append(path)
+    return outputs
+

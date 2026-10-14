@@ -27,13 +27,14 @@ This repository is a complete, reproducible solution to the problem statement in
 |   `-- REPORT.md                   concise submission report
 |-- scripts/
 |   |-- download_data.py            official-data downloader + SHA-256 output
+|   |-- run_heuristic_study.py      A* parameter-sweep experiment
 |   `-- run_all.py                  one-command experiment pipeline
 |-- src/shortest_path/
 |   |-- graph.py                    adjacency list, statistics, subgraphs, heuristic
 |   |-- dimacs.py                   streaming .gr/.co/.gz parser
 |   |-- algorithms.py               Dijkstra, A*, metrics, path reconstruction
 |   |-- experiments.py              sampling, benchmarks, CSV/JSON, bonus
-|   |-- visualization.py            nine result plots
+|   |-- visualization.py            twelve result plots
 |   `-- cli.py                      query/stats/benchmark/dynamic CLI
 |-- tests/                           parser, correctness, and edge-case tests
 `-- results/
@@ -74,7 +75,7 @@ Optional: `python -m pip install -e .` installs the package in editable mode and
 Expected final pipeline message:
 
 ```text
-Wrote 50 raw rows, 10 summary rows, and 9 plots under .../results
+Wrote 50 raw rows, 10 summary rows, and 12 plots under .../results
 ```
 
 The data downloader is idempotent and prints hashes. The files used for this report were:
@@ -337,6 +338,58 @@ The left panel plots directed edges against vertices. Edge count grows from 2,43
 
 This structure is characteristic of road networks: an intersection connects to only a few nearby roads rather than to every other intersection. Therefore `E` is approximately proportional to `V`, adjacency lists store the graph efficiently, and the practical heap-based complexity is close to `O(V log V)` for searches that explore a large fraction of a sample. The modest rise at 50,000 vertices reflects the particular BFS-induced region, not a transition to a dense graph.
 
+### A* heuristic parameter study
+
+The main comparison uses standard A* with the calibrated heuristic `h(v)`. A separate parameter experiment evaluates
+
+```text
+f(v) = g(v) + lambda*h(v)
+```
+
+for `lambda = 0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2`. The same five graph sizes and same five deterministic query pairs per size are used, producing 200 configurations. Each configuration is timed five times and represented by its median run.
+
+- `lambda=0` removes destination guidance and gives Dijkstra-like queue ordering.
+- `0<lambda<1` uses a deliberately weakened heuristic. It remains consistent and optimal but provides less guidance.
+- `lambda=1` is standard A* and uses the strongest tested heuristic with an exact optimality guarantee.
+- `lambda>1` is weighted A*. It becomes greedier and may reduce work, but the inflated heuristic is no longer guaranteed to be admissible or consistent.
+
+The percentages below are calculated independently at each graph size relative to that size's zero-heuristic result, then averaged across the five sizes. Lower work and runtime percentages are better.
+
+| Lambda | Heuristic mode | Vertices (% of zero) | Edges (% of zero) | Runtime (% of zero) | Optimal queries | Maximum cost gap |
+|---:|---|---:|---:|---:|---:|---:|
+| 0.00 | Zero heuristic | 100.00% | 100.00% | 100.00% | 25/25 | 0.000% |
+| 0.25 | Weakened admissible | 86.72% | 87.19% | 108.35% | 25/25 | 0.000% |
+| 0.50 | Weakened admissible | 71.38% | 71.96% | 107.34% | 25/25 | 0.000% |
+| 0.75 | Weakened admissible | 55.91% | 56.43% | 96.80% | 25/25 | 0.000% |
+| 1.00 | Standard A* | 39.74% | 40.44% | 60.77% | 25/25 | 0.000% |
+| 1.25 | Weighted A* | 22.29% | 23.03% | 36.39% | 13/25 | 3.689% |
+| 1.50 | Weighted A* | 45.75% | 50.60% | 72.94% | 3/25 | 10.876% |
+| 2.00 | Weighted A* | 29.53% | 30.75% | 45.52% | 2/25 | 18.024% |
+
+#### Figure 9 - Search work versus heuristic strength
+
+![Heuristic strength and vertices](results/plots/heuristic_strength_vertices.png)
+
+From `lambda=0` through `lambda=1`, explored vertices decrease monotonically at every graph size. This is the clearest demonstration that A* improves because of its heuristic rather than because of an unrelated implementation difference. Standard A* at `lambda=1` used only 39.74% as many vertices as the zero-heuristic configuration on average, a 60.26% reduction, while retaining all 25 optimal answers.
+
+The shaded region is weighted A*. It can be extremely aggressive, but stronger is not always better. At 50,000 vertices, `lambda=1.5` caused many reopenings and explored 187.7% as many vertices as the zero heuristic, whereas `lambda=1.25` explored only 40.5%. An over-weighted heuristic can commit strongly to a misleading geographic direction, later discover better routes, and reopen states. The parameter must therefore be measured rather than assumed.
+
+#### Figure 10 - Runtime versus heuristic strength
+
+![Heuristic strength and runtime](results/plots/heuristic_strength_runtime.png)
+
+Runtime is noisier than operation counts. Weak settings such as `lambda=0.25` and `lambda=0.5` reduced search work without reducing mean normalized time because heuristic computation has a fixed cost and the saved work was too small. Standard A* averaged 60.77% of zero-heuristic runtime across sizes. It is the best tested setting that preserves the exact shortest-path guarantee.
+
+Weighted `lambda=1.25` was faster on this aggregate measure, at 36.39% of zero-heuristic runtime, but it returned an optimal route for only 13 of 25 queries. The apparent speed gain is therefore not a like-for-like exact shortest-path result. The non-monotonic values at `1.5` and `2.0` also show that greedier search does not produce a monotonic speedup.
+
+#### Figure 11 - Efficiency and optimality tradeoff
+
+![Heuristic efficiency and optimality tradeoff](results/plots/heuristic_tradeoff.png)
+
+The left panel shows a sharp boundary at `lambda=1`. Every setting from zero through one remained optimal on 25 of 25 queries. Once the heuristic was inflated, optimality fell to 13/25 at `1.25`, 3/25 at `1.5`, and 2/25 at `2.0`; the worst observed cost gaps grew to 3.689%, 10.876%, and 18.024% respectively.
+
+The right panel combines normalized work and runtime. The strongest defensible conclusion is that `lambda=1` is the preferred project configuration: it provides the largest tested heuristic under the proof of consistency, cuts mean search work substantially, improves mean runtime, and retains exact answers. Weighted A* is useful only when approximate routes are explicitly acceptable and the speed-quality tradeoff has been chosen deliberately.
+
 ## 7. Bonus: dynamic edge costs
 
 The experiment models congestion with
@@ -363,7 +416,7 @@ Thus selected arcs cost `5d`, while unaffected arcs remain at `d`. The middle th
 | Route changed | Yes |
 | Shared directed path edges | 168 |
 
-#### Figure 9 - Route before and after congestion
+#### Figure 12 - Route before and after congestion
 
 ![Dynamic route comparison](results/plots/dynamic_route_comparison.png)
 
@@ -458,7 +511,7 @@ The test suite covers:
 Last local result:
 
 ```text
-Ran 7 tests ... OK
+Ran 9 tests ... OK
 ```
 
 The real-data pipeline adds 25 cross-algorithm cost assertions. The final generated artifacts are:
@@ -469,6 +522,9 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`raw_results.csv`](results/tables/raw_results.csv) | all queries, metrics, and complete paths |
 | [`summary_results.csv`](results/tables/summary_results.csv) | mean/median comparison table |
 | [`metadata.json`](results/tables/metadata.json) | seed, sizes, query count, repetitions |
+| [`heuristic_study_raw.csv`](results/tables/heuristic_study_raw.csv) | all 200 heuristic-weight/query configurations |
+| [`heuristic_study_summary.csv`](results/tables/heuristic_study_summary.csv) | parameter results summarized by size and weight |
+| [`heuristic_study_metadata.json`](results/tables/heuristic_study_metadata.json) | weights, seed, sizes, and timing repetitions |
 | [`dynamic_result.json`](results/bonus/dynamic_result.json) | bonus parameters and both complete routes |
 | [`runtime_comparison.png`](results/plots/runtime_comparison.png) | timing plot |
 | [`vertices_explored.png`](results/plots/vertices_explored.png) | vertex-work plot |
@@ -478,6 +534,9 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`per_query_runtime.png`](results/plots/per_query_runtime.png) | all 25 measured query comparisons |
 | [`cost_agreement.png`](results/plots/cost_agreement.png) | shortest-path correctness agreement |
 | [`graph_scaling.png`](results/plots/graph_scaling.png) | edge growth and average degree |
+| [`heuristic_strength_vertices.png`](results/plots/heuristic_strength_vertices.png) | search work as heuristic weight changes |
+| [`heuristic_strength_runtime.png`](results/plots/heuristic_strength_runtime.png) | normalized runtime as heuristic weight changes |
+| [`heuristic_tradeoff.png`](results/plots/heuristic_tradeoff.png) | efficiency versus optimality tradeoff |
 | [`dynamic_route_comparison.png`](results/plots/dynamic_route_comparison.png) | geographic bonus-route plot |
 
 ## 10. Useful CLI commands
@@ -491,8 +550,14 @@ python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates d
 # One A* query with complete path and metrics
 python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates data/raw/USA-road-d.NY.co.gz query 2069 13771 --algorithm astar
 
+# The same query with weighted A*; values above 1 may be suboptimal
+python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates data/raw/USA-road-d.NY.co.gz query 2069 13771 --algorithm astar --heuristic-weight 1.25
+
 # Custom benchmark
 python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates data/raw/USA-road-d.NY.co.gz benchmark --sizes 1000 5000 10000 --pairs 5 --repetitions 5
+
+# Full heuristic-weight sweep
+python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates data/raw/USA-road-d.NY.co.gz heuristic-study --weights 0 0.25 0.5 0.75 1 1.25 1.5 2
 
 # Custom dynamic-cost experiment
 python -m shortest_path.cli --graph data/raw/USA-road-d.NY.gr.gz --coordinates data/raw/USA-road-d.NY.co.gz dynamic 2069 13771

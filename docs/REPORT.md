@@ -32,6 +32,17 @@ Five reachable, non-trivial source-destination pairs are tested at every graph s
 
 The practical conclusion is that A* is preferable for these coordinate-equipped point-to-point queries. Dijkstra remains the correctness baseline and fallback when a safe heuristic is unavailable.
 
+## Heuristic parameter study
+
+An additional experiment evaluates `f(v)=g(v)+lambda*h(v)` at eight weights from 0 through 2 on the same 25 queries. Values through 1 preserve the admissibility/consistency guarantee; values above 1 are weighted A* and may return approximate routes.
+
+- Search work decreased monotonically from `lambda=0` to standard A* at `lambda=1` for every graph size.
+- Standard A* used 39.74% of zero-heuristic vertices and 60.77% of zero-heuristic runtime on average across sizes, while remaining optimal on 25/25 queries.
+- Weighted `lambda=1.25` used only 22.29% of zero-heuristic vertices, but only 13/25 routes remained optimal and the largest cost gap was 3.689%.
+- More aggressive values were not monotonically better. `lambda=1.5` caused substantial reopen work on the 50,000-vertex graph and produced a maximum cost gap of 10.876%.
+
+The study establishes why `lambda=1` is the preferred configuration: it is the strongest tested setting that combines proven exactness with substantial goal-directed pruning. Weighted A* should be used only when approximate routes are acceptable.
+
 ## Bonus result
 
 The middle 124 arcs of one original route received a 5x simulated congestion cost. Recalculation changed the route from 373 to 388 vertices and increased distance from 47,023.1 m to 47,747.8 m (+1.54%). The alternative route avoids most of the penalized segment, demonstrating adaptive mobility routing.

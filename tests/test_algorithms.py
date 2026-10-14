@@ -22,6 +22,23 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(actual.cost, expected.cost)
         self.assertEqual(actual.path, expected.path)
 
+    def test_zero_weight_astar_matches_dijkstra_search(self):
+        expected = dijkstra(self.graph, 1, 4)
+        actual = astar(
+            self.graph,
+            1,
+            4,
+            self.graph.geo_heuristic(4),
+            heuristic_weight=0.0,
+        )
+        self.assertEqual(actual.cost, expected.cost)
+        self.assertEqual(actual.vertices_explored, expected.vertices_explored)
+        self.assertEqual(actual.edges_examined, expected.edges_examined)
+
+    def test_negative_heuristic_weight_is_rejected(self):
+        with self.assertRaises(ValueError):
+            astar(self.graph, 1, 4, self.graph.geo_heuristic(4), heuristic_weight=-0.1)
+
     def test_disconnected_pair(self):
         result = dijkstra(self.graph, 4, 1)
         self.assertFalse(result.reachable)

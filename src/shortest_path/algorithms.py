@@ -90,17 +90,28 @@ def astar(
     destination: int,
     heuristic: Callable[[int], float],
     weight_fn: WeightFunction | None = None,
+    heuristic_weight: float = 1.0,
 ) -> SearchResult:
-    """A* graph search with reopen support and explicit path reconstruction."""
+    """A* graph search with reopen support and explicit path reconstruction.
+
+    A weight in [0,1] preserves admissibility when the supplied heuristic is
+    admissible. Values above 1 implement weighted A* and may be suboptimal.
+    """
 
     graph.validate_vertex(source)
     graph.validate_vertex(destination)
+    if heuristic_weight < 0:
+        raise ValueError("heuristic_weight must be non-negative")
+
+    def estimate(vertex: int) -> float:
+        return 0.0 if heuristic_weight == 0 else heuristic_weight * heuristic(vertex)
+
     started = perf_counter_ns()
     g_score = [inf] * (graph.vertex_count + 1)
     parent = [-1] * (graph.vertex_count + 1)
     closed = bytearray(graph.vertex_count + 1)
     g_score[source] = 0.0
-    heap: list[tuple[float, float, int]] = [(heuristic(source), 0.0, source)]
+    heap: list[tuple[float, float, int]] = [(estimate(source), 0.0, source)]
     vertices_explored = edges_examined = 0
     while heap:
         _f, distance_u, u = heappop(heap)
@@ -121,7 +132,7 @@ def astar(
                 parent[edge.to] = u
                 if closed[edge.to]:
                     closed[edge.to] = 0
-                heappush(heap, (candidate + heuristic(edge.to), candidate, edge.to))
+                heappush(heap, (candidate + estimate(edge.to), candidate, edge.to))
     elapsed = (perf_counter_ns() - started) / 1_000_000
     reachable = g_score[destination] < inf
     return SearchResult(

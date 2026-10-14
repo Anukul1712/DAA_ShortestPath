@@ -1,0 +1,23 @@
+{
+  "seed": 2026,
+  "pairs_per_size": 5,
+  "sizes": [
+    1000,
+    5000,
+    10000,
+    25000,
+    50000
+  ],
+  "heuristic_weights": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0,
+    1.25,
+    1.5,
+    2.0
+  ],
+  "timing_repetitions_per_query": 5,
+  "interpretation": "weights <= 1 preserve base-heuristic admissibility; weights > 1 are weighted A*"
+}

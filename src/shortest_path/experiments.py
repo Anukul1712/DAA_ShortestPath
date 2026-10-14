@@ -141,6 +141,122 @@ def summarize(rows: list[dict]) -> list[dict]:
     return summary
 
 
+def run_heuristic_study(
+    graph: RoadGraph,
+    sizes: list[int],
+    pairs_per_size: int,
+    seed: int,
+    output_dir: str | Path,
+    heuristic_weights: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0),
+    timing_repetitions: int = 3,
+) -> tuple[list[dict], list[dict]]:
+    """Measure how heuristic strength changes work, time, and optimality.
+
+    Weights from zero through one retain the guarantee of an admissible base
+    heuristic. Values above one are weighted A*: they may search less but no
+    longer have the exact-optimality guarantee used by standard A*.
+    """
+
+    if not heuristic_weights or any(weight < 0 for weight in heuristic_weights):
+        raise ValueError("heuristic weights must be a non-empty set of non-negative values")
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    rows: list[dict] = []
+    for size_index, size in enumerate(sizes):
+        subgraph = graph.bfs_induced_subgraph(size, seed=1)
+        scale = subgraph.safe_geo_scale()
+        pairs = choose_pairs(subgraph, pairs_per_size, seed + size_index)
+        original_ids = getattr(subgraph, "original_vertex_ids", None)
+        for pair_index, (source, destination) in enumerate(pairs, 1):
+            optimum = dijkstra(subgraph, source, destination)
+            base_heuristic = subgraph.geo_heuristic(destination, scale)
+            for weight in heuristic_weights:
+                runs = [
+                    astar(
+                        subgraph,
+                        source,
+                        destination,
+                        base_heuristic,
+                        heuristic_weight=weight,
+                    )
+                    for _ in range(timing_repetitions)
+                ]
+                result = _median_timed_result(runs)
+                cost_ratio = result.cost / optimum.cost
+                if weight == 0:
+                    heuristic_class = "zero_heuristic"
+                elif weight < 1:
+                    heuristic_class = "scaled_admissible"
+                elif weight == 1:
+                    heuristic_class = "standard_admissible"
+                else:
+                    heuristic_class = "weighted_no_exact_guarantee"
+                rows.append({
+                    "graph_size": len(subgraph.active_vertices),
+                    "pair": pair_index,
+                    "source": original_ids[source] if original_ids is not None else source,
+                    "destination": original_ids[destination] if original_ids is not None else destination,
+                    "heuristic_weight": weight,
+                    "heuristic_class": heuristic_class,
+                    "safe_heuristic_scale": scale,
+                    "optimal_cost": optimum.cost,
+                    "returned_cost": result.cost,
+                    "cost_ratio": cost_ratio,
+                    "optimality_gap_percent": 100.0 * (cost_ratio - 1.0),
+                    "is_optimal": result.cost == optimum.cost,
+                    "vertices_explored": result.vertices_explored,
+                    "edges_examined": result.edges_examined,
+                    "execution_time_ms": result.execution_time_ms,
+                    "path_length_vertices": len(result.path),
+                })
+
+    groups: dict[tuple[int, float], list[dict]] = {}
+    for row in rows:
+        key = (int(row["graph_size"]), float(row["heuristic_weight"]))
+        groups.setdefault(key, []).append(row)
+    summary: list[dict] = []
+    for (size, weight), items in sorted(groups.items()):
+        summary.append({
+            "graph_size": size,
+            "heuristic_weight": weight,
+            "heuristic_class": items[0]["heuristic_class"],
+            "queries": len(items),
+            "optimal_queries": sum(str(item["is_optimal"]).lower() == "true" for item in items),
+            "optimality_rate_percent": 100.0 * sum(bool(item["is_optimal"]) for item in items) / len(items),
+            "average_optimality_gap_percent": statistics.fmean(float(item["optimality_gap_percent"]) for item in items),
+            "maximum_optimality_gap_percent": max(float(item["optimality_gap_percent"]) for item in items),
+            "average_vertices_explored": statistics.fmean(int(item["vertices_explored"]) for item in items),
+            "average_edges_examined": statistics.fmean(int(item["edges_examined"]) for item in items),
+            "average_execution_time_ms": statistics.fmean(float(item["execution_time_ms"]) for item in items),
+        })
+    zero_by_size = {
+        int(row["graph_size"]): row for row in summary if float(row["heuristic_weight"]) == 0.0
+    }
+    for row in summary:
+        zero = zero_by_size[int(row["graph_size"])]
+        row["vertices_percent_of_zero"] = (
+            100.0 * float(row["average_vertices_explored"]) / float(zero["average_vertices_explored"])
+        )
+        row["edges_percent_of_zero"] = (
+            100.0 * float(row["average_edges_examined"]) / float(zero["average_edges_examined"])
+        )
+        row["runtime_percent_of_zero"] = (
+            100.0 * float(row["average_execution_time_ms"]) / float(zero["average_execution_time_ms"])
+        )
+
+    _write_csv(output / "heuristic_study_raw.csv", rows)
+    _write_csv(output / "heuristic_study_summary.csv", summary)
+    (output / "heuristic_study_metadata.json").write_text(json.dumps({
+        "seed": seed,
+        "pairs_per_size": pairs_per_size,
+        "sizes": sizes,
+        "heuristic_weights": list(heuristic_weights),
+        "timing_repetitions_per_query": timing_repetitions,
+        "interpretation": "weights <= 1 preserve base-heuristic admissibility; weights > 1 are weighted A*",
+    }, indent=2), encoding="utf-8")
+    return rows, summary
+
+
 def run_dynamic_experiment(
     graph: RoadGraph,
     source: int,
