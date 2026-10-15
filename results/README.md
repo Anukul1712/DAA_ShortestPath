@@ -25,11 +25,14 @@ This folder satisfies submission criteria 5 and 6 and separates machine-readable
 - `heuristic_strength_vertices.png` - search work as heuristic strength changes.
 - `heuristic_strength_runtime.png` - runtime response to heuristic strength.
 - `heuristic_tradeoff.png` - solution-quality and efficiency tradeoff.
-- `dynamic_route_comparison.png`
+- `dynamic_route_comparison.png` - geographic overlay of the original and rerouted paths.
+- `dynamic_cost_comparison.png` - physical route length compared with congestion-adjusted objective cost.
+- `dynamic_route_overlap.png` - shared/unique path edges and the number of congested edges avoided.
+- `dynamic_congestion_profile.png` - edge-by-edge normal and penalized costs along the original route.
 
 ## `bonus/`
 
-- `dynamic_result.json` - formula parameters, changed costs, route comparison, and complete original/new paths.
+- `dynamic_result.json` - formula parameters, all selected congested edges, four cost comparisons, overlap metrics, savings, and complete original/new paths.
 
 All artifacts are regenerated with:
 

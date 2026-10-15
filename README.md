@@ -10,7 +10,7 @@ This repository is a complete, reproducible solution to the problem statement in
 - Correctness: Dijkstra and A* returned the **same optimal cost in all 25 measured queries**.
 - Search work: A* examined 44.04%-77.73% fewer vertices across the tested sizes.
 - Runtime: A* was faster at every tested size after its heuristic was calibrated in the dataset's native distance units.
-- Bonus: applying 5x cost to 124 arcs in the middle third of a route changed the route; cost rose from **47,023.1 m to 47,747.8 m (+1.54%)**.
+- Bonus: applying 5x cost to 124 arcs made staying on the original route cost **106.79 km-equivalent**. The recomputed route avoided all 124 arcs, travelled **47.75 km**, and reduced the dynamic objective by **55.29%** versus staying.
 
 ## Repository map
 
@@ -34,7 +34,7 @@ This repository is a complete, reproducible solution to the problem statement in
 |   |-- dimacs.py                   streaming .gr/.co/.gz parser
 |   |-- algorithms.py               Dijkstra, A*, metrics, path reconstruction
 |   |-- experiments.py              sampling, benchmarks, CSV/JSON, bonus
-|   |-- visualization.py            twelve result plots
+|   |-- visualization.py            fifteen result plots
 |   `-- cli.py                      query/stats/benchmark/dynamic CLI
 |-- tests/                           parser, correctness, and edge-case tests
 `-- results/
@@ -75,7 +75,7 @@ Optional: `python -m pip install -e .` installs the package in editable mode and
 Expected final pipeline message:
 
 ```text
-Wrote 50 raw rows, 10 summary rows, and 12 plots under .../results
+Wrote 50 raw rows, 10 summary rows, and 15 plots under .../results
 ```
 
 The data downloader is idempotent and prints hashes. The files used for this report were:
@@ -258,6 +258,65 @@ Exact machine-dependent times will vary. Operation counts and optimal costs are 
 
 Full precision is preserved in [`summary_results.csv`](results/tables/summary_results.csv), and individual queries are in [`raw_results.csv`](results/tables/raw_results.csv).
 
+### Complete per-query result table
+
+This is the full set of 50 reported algorithm runs: five graph sizes, five queries per size, and both algorithms for every query. `Path vertices` includes both endpoints. `Explored` counts vertices removed from the priority queue and settled; `Edges` counts outgoing arcs examined during relaxation. Time is the median of five executions. The CSV also contains native cost, internal subgraph IDs, heuristic scale, and the complete official-ID path sequence, which is intentionally not repeated here because some paths contain hundreds of IDs.
+
+| Size | Query | Official source -> destination | Algorithm | Distance (m) | Path vertices | Explored | Edges | Time (ms) |
+|---:|:---:|---|---|---:|---:|---:|---:|---:|
+| 1,000 | Q1 | 1 -> 3543 | Dijkstra | 3,637.9 | 29 | 836 | 2,108 | 0.567 |
+| 1,000 | Q1 | 1 -> 3543 | A* | 3,637.9 | 29 | 180 | 467 | 0.197 |
+| 1,000 | Q2 | 1280 -> 2990 | Dijkstra | 2,727.8 | 23 | 653 | 1,678 | 0.456 |
+| 1,000 | Q2 | 1280 -> 2990 | A* | 2,727.8 | 23 | 83 | 221 | 0.094 |
+| 1,000 | Q3 | 1279 -> 712 | Dijkstra | 3,723.3 | 37 | 864 | 2,156 | 0.601 |
+| 1,000 | Q3 | 1279 -> 712 | A* | 3,723.3 | 37 | 125 | 329 | 0.139 |
+| 1,000 | Q4 | 1384 -> 3460 | Dijkstra | 4,488.9 | 32 | 924 | 2,281 | 0.622 |
+| 1,000 | Q4 | 1384 -> 3460 | A* | 4,488.9 | 32 | 262 | 695 | 0.289 |
+| 1,000 | Q5 | 1395 -> 1298 | Dijkstra | 2,630.3 | 20 | 545 | 1,401 | 0.377 |
+| 1,000 | Q5 | 1395 -> 1298 | A* | 2,630.3 | 20 | 201 | 513 | 0.198 |
+| 5,000 | Q1 | 1 -> 1645 | Dijkstra | 12,660.5 | 77 | 4,354 | 10,692 | 2.932 |
+| 5,000 | Q1 | 1 -> 1645 | A* | 12,660.5 | 77 | 2,781 | 7,126 | 3.144 |
+| 5,000 | Q2 | 1398 -> 261098 | Dijkstra | 16,786.9 | 74 | 4,909 | 11,948 | 4.074 |
+| 5,000 | Q2 | 1398 -> 261098 | A* | 16,786.9 | 74 | 824 | 2,067 | 0.994 |
+| 5,000 | Q3 | 6382 -> 262985 | Dijkstra | 13,902.9 | 70 | 4,660 | 11,383 | 4.719 |
+| 5,000 | Q3 | 6382 -> 262985 | A* | 13,902.9 | 70 | 1,056 | 2,506 | 1.246 |
+| 5,000 | Q4 | 7 -> 260752 | Dijkstra | 11,017.8 | 56 | 4,119 | 10,136 | 3.324 |
+| 5,000 | Q4 | 7 -> 260752 | A* | 11,017.8 | 56 | 457 | 1,064 | 0.499 |
+| 5,000 | Q5 | 1489 -> 260746 | Dijkstra | 14,956.3 | 91 | 4,613 | 11,274 | 3.495 |
+| 5,000 | Q5 | 1489 -> 260746 | A* | 14,956.3 | 91 | 1,168 | 2,900 | 1.334 |
+| 10,000 | Q1 | 1 -> 244307 | Dijkstra | 25,394.7 | 110 | 9,368 | 22,551 | 6.666 |
+| 10,000 | Q1 | 1 -> 244307 | A* | 25,394.7 | 110 | 4,956 | 12,195 | 5.363 |
+| 10,000 | Q2 | 6382 -> 258544 | Dijkstra | 24,833.3 | 108 | 9,351 | 22,511 | 6.785 |
+| 10,000 | Q2 | 6382 -> 258544 | A* | 24,833.3 | 108 | 6,039 | 14,975 | 7.358 |
+| 10,000 | Q3 | 1489 -> 262713 | Dijkstra | 23,672.0 | 134 | 8,539 | 20,632 | 6.230 |
+| 10,000 | Q3 | 1489 -> 262713 | A* | 23,672.0 | 134 | 2,756 | 6,677 | 2.861 |
+| 10,000 | Q4 | 1348 -> 262367 | Dijkstra | 29,382.2 | 146 | 9,908 | 23,770 | 8.296 |
+| 10,000 | Q4 | 1348 -> 262367 | A* | 29,382.2 | 146 | 4,584 | 11,160 | 5.269 |
+| 10,000 | Q5 | 3546 -> 5306 | Dijkstra | 17,285.6 | 133 | 5,968 | 14,608 | 4.332 |
+| 10,000 | Q5 | 3546 -> 5306 | A* | 17,285.6 | 133 | 3,151 | 8,143 | 3.473 |
+| 25,000 | Q1 | 1 -> 254333 | Dijkstra | 29,811.4 | 212 | 18,342 | 45,853 | 20.094 |
+| 25,000 | Q1 | 1 -> 254333 | A* | 29,811.4 | 212 | 7,356 | 18,931 | 10.626 |
+| 25,000 | Q2 | 728 -> 239328 | Dijkstra | 34,683.8 | 202 | 24,268 | 60,508 | 24.038 |
+| 25,000 | Q2 | 728 -> 239328 | A* | 34,683.8 | 202 | 9,383 | 22,889 | 12.134 |
+| 25,000 | Q3 | 648 -> 242438 | Dijkstra | 31,890.1 | 146 | 23,020 | 57,448 | 33.110 |
+| 25,000 | Q3 | 648 -> 242438 | A* | 31,890.1 | 146 | 9,871 | 25,440 | 73.673 |
+| 25,000 | Q4 | 6175 -> 241331 | Dijkstra | 37,612.6 | 181 | 23,664 | 58,893 | 42.881 |
+| 25,000 | Q4 | 6175 -> 241331 | A* | 37,612.6 | 181 | 12,032 | 30,338 | 33.887 |
+| 25,000 | Q5 | 2026 -> 246841 | Dijkstra | 24,273.7 | 226 | 15,100 | 38,135 | 29.088 |
+| 25,000 | Q5 | 2026 -> 246841 | A* | 24,273.7 | 226 | 6,170 | 15,877 | 17.747 |
+| 50,000 | Q1 | 1 -> 34669 | Dijkstra | 53,089.8 | 283 | 46,726 | 122,205 | 92.627 |
+| 50,000 | Q1 | 1 -> 34669 | A* | 53,089.8 | 283 | 30,633 | 79,936 | 95.614 |
+| 50,000 | Q2 | 648 -> 9095 | Dijkstra | 50,703.3 | 235 | 47,396 | 123,680 | 90.171 |
+| 50,000 | Q2 | 648 -> 9095 | A* | 50,703.3 | 235 | 25,011 | 63,496 | 75.117 |
+| 50,000 | Q3 | 2026 -> 10385 | Dijkstra | 47,852.6 | 356 | 46,609 | 121,867 | 139.873 |
+| 50,000 | Q3 | 2026 -> 10385 | A* | 47,852.6 | 356 | 28,392 | 75,342 | 95.040 |
+| 50,000 | Q4 | 2069 -> 13771 | Dijkstra | 47,023.1 | 373 | 47,036 | 122,972 | 100.308 |
+| 50,000 | Q4 | 2069 -> 13771 | A* | 47,023.1 | 373 | 27,557 | 76,117 | 89.383 |
+| 50,000 | Q5 | 1643 -> 229854 | Dijkstra | 42,370.3 | 298 | 42,612 | 112,075 | 95.193 |
+| 50,000 | Q5 | 1643 -> 229854 | A* | 42,370.3 | 298 | 17,328 | 44,322 | 54.138 |
+
+How to read one pair: for the 50,000-vertex Q4 route, both algorithms found 47,023.1 m and a 373-vertex path. A* explored 27,557 vertices rather than 47,036 and examined 76,117 edges rather than 122,972. This is the same route selected for the bonus experiment because it was the longest path, by vertex count, among the five largest-graph benchmark queries.
+
 ### Search-space reductions from A*
 
 | Graph size | Fewer vertices | Fewer edges | Faster runtime |
@@ -392,7 +451,11 @@ The right panel combines normalized work and runtime. The strongest defensible c
 
 ## 7. Bonus: dynamic edge costs
 
-The experiment models congestion with
+The bonus asks whether the route changes when edge costs change over time. This experiment treats a reproducibly selected part of the road network as congested, recalculates the shortest path, and compares the new decision with the counterfactual of continuing along the old route.
+
+### Cost model and experiment procedure
+
+Dynamic cost is modelled as
 
 ```text
 w'(u,v) = alpha * d(u,v) + beta * c(u,v)
@@ -400,31 +463,82 @@ alpha = 1, beta = 1
 c(u,v) = 4 * d(u,v) for selected congested arcs, otherwise 0
 ```
 
-Thus selected arcs cost `5d`, while unaffected arcs remain at `d`. The middle third of the original 50,000-vertex route is marked congested, then shortest path is recomputed from scratch.
+Here, `d(u,v)` is the normal distance cost and `c(u,v)` is an added live-condition penalty. Therefore a selected arc has `w'=d+4d=5d`, while every unaffected arc remains at `w'=d`. The units of `w'` are cost-equivalent distance units. They measure the optimization objective, not necessarily physical distance.
+
+The experiment is deterministic:
+
+1. Use the 50,000-vertex induced graph and benchmark query Q4, official IDs `2069 -> 13771`.
+2. Compute the original distance-optimal route using normal costs.
+3. Mark its middle 124 directed edges as congested.
+4. Multiply only those edges' costs by 5 without changing vertices, edges, or endpoints.
+5. Recompute the exact shortest route with Dijkstra under `w'`.
+6. Evaluate both the old route and the new route under both normal distance and the new dynamic objective.
+
+This four-way comparison is important. The 47.75 km value is the physical length of the reroute. The 106.79 km-equivalent value is what the old route would cost after penalties. Comparing only 47.02 km with 47.75 km would show the detour but would hide why taking it is beneficial.
+
+### Full bonus result table
 
 | Bonus metric | Result |
 |---|---:|
 | Source -> destination | 2,069 -> 13,771 |
-| Congested original-route arcs | 124 |
-| Original native cost | 470,231 units |
-| New native cost | 477,478 units |
-| Original distance | 47,023.1 m |
-| New distance | 47,747.8 m |
-| Distance increase | 724.7 m (1.54%) |
-| Original path length | 373 vertices |
-| New path length | 388 vertices |
+| Graph size | 50,000 vertices, 130,522 directed edges |
+| Congestion multiplier | 5x |
+| Congested edges on original route | 124 |
+| Original route physical distance | 470,231 units = 47,023.1 m |
+| Original route cost after congestion | 1,067,907 units = 106,790.7 m-equivalent |
+| Rerouted path physical distance | 477,478 units = 47,747.8 m |
+| Rerouted path cost after congestion | 477,478 units = 47,747.8 m-equivalent |
+| Extra physical distance taken | 7,247 units = 724.7 m = 1.54% |
+| Dynamic cost saved versus staying | 590,429 units = 59,042.9 m-equivalent = 55.29% |
+| Original route length | 373 vertices / 372 directed edges |
+| Rerouted path length | 388 vertices / 387 directed edges |
 | Route changed | Yes |
 | Shared directed path edges | 168 |
+| Original-only / reroute-only edges | 204 / 219 |
+| Edge-set Jaccard similarity | 28.43% |
+| Common prefix / suffix | 123 / 45 edges |
+| Congested edges still used by reroute | 0 of 124 |
+| Congested edges avoided | 124 of 124 = 100% |
+
+The decision is rational under the stated objective: the reroute is only 724.7 m longer physically, but it avoids a 59,042.9 m-equivalent dynamic penalty relative to remaining on the original path. Because the reroute touches none of the penalized edges, its physical distance and dynamic cost happen to be equal in this run.
 
 #### Figure 12 - Route before and after congestion
 
 ![Dynamic route comparison](results/plots/dynamic_route_comparison.png)
 
-The red line is the original distance-optimal route and the blue line is the route after dynamic penalties are applied. `S` and `D` identify the same source and destination in both searches. Shared portions can visually overlap, while separated portions show where rerouting occurred.
+The red line is the original distance-optimal route and the blue line is the route after dynamic penalties are applied. `S` and `D` identify the same source and destination in both searches. The routes share the first 123 and final 45 directed edges. Between those common portions, the blue path visibly diverts around the penalized middle section and later rejoins the original route.
 
-The original route used 373 vertices and cost 470,231 native units, or 47,023.1 meters. Penalizing 124 arcs in its middle third caused the recomputed route to use 388 vertices and cost 477,478 native units, or 47,747.8 meters. The route therefore changed and accepted 724.7 meters of additional base distance, a 1.54% increase, to avoid edges whose dynamic cost had become five times their normal distance cost. The two paths retained 168 shared directed edges, which shows that the algorithm preserved useful unaffected sections and changed only the portion where an alternative was beneficial.
+The map answers "where did the route change?" but line overlap makes exact counts difficult to judge. Figures 13 and 14 provide the numerical comparisons.
 
-The result demonstrates the intended IoV interpretation: when congestion or another live condition changes edge costs, the best route may change even though the road topology and endpoints remain fixed. Recomputing from the current cost function produces the new optimum. The exact paths, modified arcs, and parameters are in [`dynamic_result.json`](results/bonus/dynamic_result.json).
+#### Figure 13 - Physical distance versus congestion-adjusted cost
+
+![Dynamic cost comparison](results/plots/dynamic_cost_comparison.png)
+
+Each route has two bars. The blue bar is ordinary physical length; the red bar is the value of the live dynamic objective. On the original route, the congestion penalty raises the objective from 47.02 to 106.79 km-equivalent. On the reroute, both bars are 47.75 because it uses zero congested edges. This is the clearest evidence that accepting a 1.54% longer physical trip is worthwhile: it produces a 55.29% lower live cost than staying on the old route.
+
+The word "equivalent" matters. A 5x penalty can represent delay, energy, risk, or congestion preference translated into the optimizer's common cost scale. It does not claim that the road physically became five times longer.
+
+#### Figure 14 - Route overlap and congestion avoidance
+
+![Dynamic route overlap](results/plots/dynamic_route_overlap.png)
+
+The left panel decomposes both paths into shared and route-specific directed edges. They share 168 edges, while 204 appear only on the original path and 219 only on the reroute. Their edge-set Jaccard similarity is `168 / (168+204+219) = 28.43%`. The right panel shows that the recomputed route avoids all 124 penalized edges and still uses none of them.
+
+These counts explain the map quantitatively. The result is not a tiny local edge swap: it preserves a useful common beginning and ending but makes a substantial middle detour. The new route has 15 more edges overall, which is consistent with its modest additional physical distance.
+
+#### Figure 15 - Congestion penalty along the original route
+
+![Dynamic congestion profile](results/plots/dynamic_congestion_profile.png)
+
+The horizontal axis is edge position along the original route, not geographic distance. The blue line shows every edge's normal distance cost; the red line shows the same edge after the live multiplier. The yellow middle band identifies the 124 consecutively selected congested edges. Outside the band, the curves coincide because cost is unchanged. Inside it, the red values are exactly five times the blue values.
+
+This plot verifies that the code applied the model where intended and did not globally inflate the network. It also shows why different edges produce different absolute penalties: all are multiplied by the same factor, but their original lengths differ.
+
+### Bonus conclusion and practical interpretation
+
+The route changed because shortest paths depend on edge weights, not only graph topology. When a connected vehicle system receives a congestion, energy, weather, or risk update, it can retain the same road graph and run the algorithm again with the new weight function. In this measured case, recomputation found an exact minimum-cost route that travels 724.7 m farther but avoids every affected edge and saves 59.04 km-equivalent of live cost.
+
+This experiment is a controlled demonstration rather than a claim about live New York traffic. The congested segment and multiplier are simulated, Dijkstra recomputes from scratch, and the objective is a simple linear combination. A production IoV/UAV system would obtain changing penalties from sensors or services, choose calibrated coefficients for distance, time, energy, and risk, and might use incremental algorithms when updates arrive frequently. The exact paths, all selected edges, derived metrics, and parameters are preserved in [`dynamic_result.json`](results/bonus/dynamic_result.json).
 
 ## 8. Answers to the ten assignment questions (Part F)
 
@@ -509,11 +623,12 @@ The test suite covers:
 - compressed DIMACS graph and coordinate parsing;
 - zero-heuristic A* equivalence to Dijkstra search work;
 - rejection of invalid negative heuristic weights.
+- dynamic-cost distance, penalty, rerouting, and avoidance metrics.
 
 Last local result:
 
 ```text
-Ran 9 tests ... OK
+Ran 10 tests ... OK
 ```
 
 The real-data pipeline adds 25 cross-algorithm cost assertions. The final generated artifacts are:
@@ -540,6 +655,9 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`heuristic_strength_runtime.png`](results/plots/heuristic_strength_runtime.png) | normalized runtime as heuristic weight changes |
 | [`heuristic_tradeoff.png`](results/plots/heuristic_tradeoff.png) | efficiency versus optimality tradeoff |
 | [`dynamic_route_comparison.png`](results/plots/dynamic_route_comparison.png) | geographic bonus-route plot |
+| [`dynamic_cost_comparison.png`](results/plots/dynamic_cost_comparison.png) | physical distance versus dynamic objective |
+| [`dynamic_route_overlap.png`](results/plots/dynamic_route_overlap.png) | shared edges, changed edges, and congestion avoidance |
+| [`dynamic_congestion_profile.png`](results/plots/dynamic_congestion_profile.png) | edge-by-edge penalty location on the original route |
 
 ## 10. Useful CLI commands
 

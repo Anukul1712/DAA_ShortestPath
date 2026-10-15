@@ -1,7 +1,10 @@
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
 from shortest_path.algorithms import astar, dijkstra
+from shortest_path.experiments import run_dynamic_experiment
 from shortest_path.graph import Edge, RoadGraph
 
 
@@ -56,6 +59,26 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(subgraph.active_vertices, (1, 2, 3))
         self.assertEqual(subgraph.original_vertex_ids[1], 1)
         self.assertEqual(len(subgraph.adjacency), 4)
+
+    def test_dynamic_experiment_reports_distance_cost_and_avoidance(self):
+        adjacency = [
+            [],
+            [Edge(2, 1)],
+            [Edge(3, 1), Edge(6, 2)],
+            [Edge(4, 1)],
+            [Edge(5, 1)],
+            [],
+            [Edge(4, 2)],
+        ]
+        graph = RoadGraph(adjacency, [None] * 7, "dynamic-fixture")
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_dynamic_experiment(graph, 1, 5, Path(directory), congestion_multiplier=5)
+        self.assertEqual(report["baseline_base_cost"], 4)
+        self.assertEqual(report["baseline_cost_under_congestion"], 12)
+        self.assertEqual(report["rerouted_base_cost"], 6)
+        self.assertEqual(report["rerouted_dynamic_cost"], 6)
+        self.assertEqual(report["congested_edges_avoided"], 2)
+        self.assertEqual(report["congested_edges_used_by_reroute"], 0)
 
 
 if __name__ == "__main__":

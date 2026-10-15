@@ -278,26 +278,90 @@ def run_dynamic_experiment(
         return edge.weight * (congestion_multiplier if (u, edge.to) in congested else 1.0)
 
     updated = dijkstra(graph, source, destination, dynamic_weight)
+
+    def path_cost(path: list[int], use_dynamic_weights: bool) -> float:
+        total = 0.0
+        for u, v in zip(path, path[1:]):
+            candidates = [edge for edge in graph.adjacency[u] if edge.to == v]
+            if not candidates:
+                raise AssertionError(f"path contains missing edge {u}->{v}")
+            if use_dynamic_weights:
+                total += min(dynamic_weight(u, edge) for edge in candidates)
+            else:
+                total += min(edge.weight for edge in candidates)
+        return total
+
+    baseline_edges = list(zip(baseline.path, baseline.path[1:]))
+    updated_edges = list(zip(updated.path, updated.path[1:]))
+    baseline_edge_set = set(baseline_edges)
+    updated_edge_set = set(updated_edges)
+    shared_edges = baseline_edge_set & updated_edge_set
+    union_edges = baseline_edge_set | updated_edge_set
+    congested_used = congested & updated_edge_set
+    baseline_cost_under_congestion = path_cost(baseline.path, True)
+    updated_base_cost = path_cost(updated.path, False)
+
+    prefix_edges = 0
+    for baseline_edge, updated_edge in zip(baseline_edges, updated_edges):
+        if baseline_edge != updated_edge:
+            break
+        prefix_edges += 1
+    suffix_edges = 0
+    for baseline_edge, updated_edge in zip(reversed(baseline_edges), reversed(updated_edges)):
+        if baseline_edge != updated_edge:
+            break
+        suffix_edges += 1
+
+    unit = graph.weight_unit_meters
+    distance_increase = updated_base_cost - baseline.cost
+    dynamic_savings = baseline_cost_under_congestion - updated.cost
+    original_ids = getattr(graph, "original_vertex_ids", None)
+
     report = {
-        "source": getattr(graph, "original_vertex_ids", [])[source] if hasattr(graph, "original_vertex_ids") else source,
-        "destination": getattr(graph, "original_vertex_ids", [])[destination] if hasattr(graph, "original_vertex_ids") else destination,
+        "source": original_ids[source] if original_ids is not None else source,
+        "destination": original_ids[destination] if original_ids is not None else destination,
         "subgraph_source": source,
         "subgraph_destination": destination,
         "alpha": 1.0,
         "beta": 1.0,
         "congestion_multiplier": congestion_multiplier,
         "congested_edges": len(congested),
+        "congested_subgraph_edges": [list(edge) for edge in sorted(congested)],
         "baseline_cost": baseline.cost,
         "dynamic_cost": updated.cost,
-        "weight_unit_meters": graph.weight_unit_meters,
-        "baseline_cost_meters": baseline.cost * graph.weight_unit_meters,
-        "dynamic_cost_meters": updated.cost * graph.weight_unit_meters,
-        "baseline_path": [graph.original_vertex_ids[v] for v in baseline.path] if hasattr(graph, "original_vertex_ids") else baseline.path,
-        "dynamic_path": [graph.original_vertex_ids[v] for v in updated.path] if hasattr(graph, "original_vertex_ids") else updated.path,
+        "baseline_base_cost": baseline.cost,
+        "baseline_cost_under_congestion": baseline_cost_under_congestion,
+        "rerouted_base_cost": updated_base_cost,
+        "rerouted_dynamic_cost": updated.cost,
+        "weight_unit_meters": unit,
+        "baseline_cost_meters": baseline.cost * unit,
+        "dynamic_cost_meters": updated.cost * unit,
+        "baseline_base_distance_meters": baseline.cost * unit,
+        "baseline_cost_under_congestion_meters_equivalent": baseline_cost_under_congestion * unit,
+        "rerouted_base_distance_meters": updated_base_cost * unit,
+        "rerouted_dynamic_cost_meters_equivalent": updated.cost * unit,
+        "distance_increase_meters": distance_increase * unit,
+        "distance_increase_percent": 100.0 * distance_increase / baseline.cost,
+        "dynamic_savings_vs_staying_meters_equivalent": dynamic_savings * unit,
+        "dynamic_savings_vs_staying_percent": 100.0 * dynamic_savings / baseline_cost_under_congestion,
+        "baseline_path": [original_ids[v] for v in baseline.path] if original_ids is not None else baseline.path,
+        "dynamic_path": [original_ids[v] for v in updated.path] if original_ids is not None else updated.path,
         "baseline_subgraph_path": baseline.path,
         "dynamic_subgraph_path": updated.path,
         "route_changed": baseline.path != updated.path,
-        "shared_path_edges": len(set(zip(baseline.path, baseline.path[1:])) & set(zip(updated.path, updated.path[1:]))),
+        "baseline_path_vertices": len(baseline.path),
+        "rerouted_path_vertices": len(updated.path),
+        "baseline_path_edges": len(baseline_edges),
+        "rerouted_path_edges": len(updated_edges),
+        "shared_path_edges": len(shared_edges),
+        "baseline_only_edges": len(baseline_edge_set - updated_edge_set),
+        "rerouted_only_edges": len(updated_edge_set - baseline_edge_set),
+        "edge_jaccard_similarity_percent": 100.0 * len(shared_edges) / len(union_edges),
+        "common_prefix_edges": prefix_edges,
+        "common_suffix_edges": suffix_edges,
+        "congested_edges_used_by_reroute": len(congested_used),
+        "congested_edges_avoided": len(congested - updated_edge_set),
+        "congested_edges_avoided_percent": 100.0 * len(congested - updated_edge_set) / len(congested),
     }
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)

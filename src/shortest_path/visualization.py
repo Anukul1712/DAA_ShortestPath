@@ -257,6 +257,121 @@ def plot_dynamic_routes(
     return destination
 
 
+def generate_dynamic_analysis_plots(
+    graph: RoadGraph,
+    bonus_dir: str | Path,
+    plots_dir: str | Path | None = None,
+) -> list[Path]:
+    """Create explanatory plots for the dynamic-cost bonus experiment."""
+
+    import json
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise RuntimeError("Install dependencies with: pip install -r requirements.txt") from exc
+
+    bonus = Path(bonus_dir)
+    plots = Path(plots_dir) if plots_dir is not None else bonus
+    plots.mkdir(parents=True, exist_ok=True)
+    report = json.loads((bonus / "dynamic_result.json").read_text(encoding="utf-8"))
+    outputs: list[Path] = []
+
+    # Compare physical distance with the objective value after congestion costs.
+    labels = ["Original route", "Rerouted path"]
+    base_km = [
+        report["baseline_base_distance_meters"] / 1000.0,
+        report["rerouted_base_distance_meters"] / 1000.0,
+    ]
+    dynamic_km = [
+        report["baseline_cost_under_congestion_meters_equivalent"] / 1000.0,
+        report["rerouted_dynamic_cost_meters_equivalent"] / 1000.0,
+    ]
+    positions = [0, 1]
+    width = 0.36
+    fig, ax = plt.subplots(figsize=(8, 5.4), dpi=170)
+    base_bars = ax.bar([x - width / 2 for x in positions], base_km, width,
+                       label="Physical distance", color="#00798C")
+    dynamic_bars = ax.bar([x + width / 2 for x in positions], dynamic_km, width,
+                          label="Cost with congestion", color="#D1495B")
+    ax.bar_label(base_bars, fmt="%.2f", padding=3)
+    ax.bar_label(dynamic_bars, fmt="%.2f", padding=3)
+    ax.set_xticks(positions, labels)
+    ax.set_ylabel("Kilometers or kilometer-equivalent cost")
+    ax.set_title("Bonus: rerouting avoids the cost of staying on the original path")
+    ax.grid(axis="y", alpha=0.22)
+    ax.legend()
+    fig.tight_layout()
+    path = plots / "dynamic_cost_comparison.png"
+    fig.savefig(path)
+    plt.close(fig)
+    outputs.append(path)
+
+    # Make route overlap and congestion avoidance visible without relying on the map.
+    fig, (ax_overlap, ax_avoid) = plt.subplots(1, 2, figsize=(11, 5), dpi=170)
+    shared = report["shared_path_edges"]
+    original_only = report["baseline_only_edges"]
+    rerouted_only = report["rerouted_only_edges"]
+    ax_overlap.barh([0], [shared], color="#7A5195", label="Shared edges")
+    ax_overlap.barh([0], [original_only], left=[shared], color="#D1495B", label="Original only")
+    ax_overlap.barh([1], [shared], color="#7A5195")
+    ax_overlap.barh([1], [rerouted_only], left=[shared], color="#00798C", label="Reroute only")
+    ax_overlap.set_yticks([0, 1], ["Original route", "Rerouted path"])
+    ax_overlap.set_xlabel("Directed path edges")
+    ax_overlap.set_title("Route overlap")
+    ax_overlap.grid(axis="x", alpha=0.2)
+    ax_overlap.legend(fontsize=8)
+
+    avoided = report["congested_edges_avoided"]
+    used = report["congested_edges_used_by_reroute"]
+    bars = ax_avoid.bar(["Avoided", "Still used"], [avoided, used],
+                        color=["#00798C", "#D1495B"], width=0.62)
+    ax_avoid.bar_label(bars, padding=3)
+    ax_avoid.set_ylabel("Congested directed edges")
+    ax_avoid.set_title("How much congestion the new route avoids")
+    ax_avoid.grid(axis="y", alpha=0.2)
+    fig.suptitle(
+        f"Path structure: {report['edge_jaccard_similarity_percent']:.1f}% edge-set similarity",
+        fontsize=14,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    path = plots / "dynamic_route_overlap.png"
+    fig.savefig(path)
+    plt.close(fig)
+    outputs.append(path)
+
+    # Show exactly where the multiplier changes the original route's edge costs.
+    congested = {tuple(edge) for edge in report["congested_subgraph_edges"]}
+    baseline_path = report["baseline_subgraph_path"]
+    base_values = []
+    dynamic_values = []
+    for u, v in zip(baseline_path, baseline_path[1:]):
+        weight = min(edge.weight for edge in graph.adjacency[u] if edge.to == v)
+        meters = weight * graph.weight_unit_meters
+        base_values.append(meters)
+        dynamic_values.append(meters * report["congestion_multiplier"] if (u, v) in congested else meters)
+    edge_indices = list(range(1, len(base_values) + 1))
+    fig, ax = plt.subplots(figsize=(11, 5), dpi=170)
+    ax.plot(edge_indices, base_values, color="#00798C", linewidth=1.3, label="Normal edge cost")
+    ax.plot(edge_indices, dynamic_values, color="#D1495B", linewidth=1.3,
+            label="Edge cost after congestion")
+    congested_indices = [index for index, edge in enumerate(zip(baseline_path, baseline_path[1:]), 1)
+                         if edge in congested]
+    if congested_indices:
+        ax.axvspan(min(congested_indices), max(congested_indices), color="#EDAE49", alpha=0.16,
+                   label="Congested middle section")
+    ax.set_xlabel("Edge position along the original route")
+    ax.set_ylabel("Edge cost (meter-equivalent)")
+    ax.set_title("Where the congestion penalty is applied")
+    ax.grid(alpha=0.2)
+    ax.legend()
+    fig.tight_layout()
+    path = plots / "dynamic_congestion_profile.png"
+    fig.savefig(path)
+    plt.close(fig)
+    outputs.append(path)
+    return outputs
+
+
 def generate_heuristic_study_plots(
     tables_dir: str | Path,
     plots_dir: str | Path | None = None,

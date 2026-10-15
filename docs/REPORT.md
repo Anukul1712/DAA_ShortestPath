@@ -45,7 +45,7 @@ The study establishes why `lambda=1` is the preferred configuration: it is the s
 
 ## Bonus result
 
-The middle 124 arcs of one original route received a 5x simulated congestion cost. Recalculation changed the route from 373 to 388 vertices and increased distance from 47,023.1 m to 47,747.8 m (+1.54%). The alternative route avoids most of the penalized segment, demonstrating adaptive mobility routing.
+The middle 124 arcs of one original route received a 5x simulated congestion cost. Staying on that route would raise its objective from 47,023.1 m to 106,790.7 m-equivalent. Recalculation changed the route from 373 to 388 vertices and increased physical distance to 47,747.8 m (+1.54%), but it avoided all 124 penalized arcs and reduced dynamic cost by 55.29% versus staying. The main README provides the complete metric table and four explained bonus figures.
 
 ## Limitations
 
