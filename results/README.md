@@ -44,6 +44,12 @@ All artifacts are regenerated with:
 python scripts/run_all.py
 ```
 
+`run_all.py` validates the complete manifest automatically. Validate an existing result folder without rerunning benchmarks with:
+
+```bash
+python scripts/validate_outputs.py
+```
+
 Run only the parameter study with:
 
 ```bash

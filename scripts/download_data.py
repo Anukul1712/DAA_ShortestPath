@@ -11,6 +11,10 @@ from pathlib import Path
 
 BASE = "https://www.diag.uniroma1.it/challenge9/data/USA-road-d"
 FILES = ("USA-road-d.NY.gr.gz", "USA-road-d.NY.co.gz")
+EXPECTED_SHA256 = {
+    "USA-road-d.NY.gr.gz": "7b2446c7ffe6179efbc42af6812448e8cb782f12968ca2bb1d50d979343056d4",
+    "USA-road-d.NY.co.gz": "02547a628742164e02bd73f59e33a65d23dfac8fc54c09275c8b9169c38eafdf",
+}
 
 
 def extract_gzip(archive: Path) -> Path:
@@ -47,6 +51,10 @@ def main() -> None:
             temporary.replace(destination)
         digest = hashlib.sha256(destination.read_bytes()).hexdigest()
         print(f"{name}: {destination.stat().st_size:,} bytes, sha256={digest}")
+        if digest != EXPECTED_SHA256[name]:
+            raise RuntimeError(
+                f"checksum mismatch for {name}: expected {EXPECTED_SHA256[name]}, got {digest}"
+            )
         if not args.no_extract:
             extracted = extract_gzip(destination)
             print(f"{extracted.name}: {extracted.stat().st_size:,} bytes")

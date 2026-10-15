@@ -28,7 +28,8 @@ This repository is a complete, reproducible solution to the problem statement in
 |-- scripts/
 |   |-- download_data.py            official-data downloader + SHA-256 output
 |   |-- run_heuristic_study.py      A* parameter-sweep experiment
-|   `-- run_all.py                  one-command experiment pipeline
+|   |-- run_all.py                  one-command experiment pipeline
+|   `-- validate_outputs.py         complete artifact/invariant validator
 |-- src/shortest_path/
 |   |-- graph.py                    adjacency list, statistics, subgraphs, heuristic
 |   |-- dimacs.py                   streaming .gr/.co/.gz parser
@@ -76,9 +77,12 @@ Expected final pipeline message:
 
 ```text
 Wrote 50 raw rows, 10 summary rows, and 17 plots under .../results
+Validated complete output manifest: 50 benchmark rows, 200 heuristic rows, 24 alpha-beta rows, and 17 plots.
 ```
 
-The data downloader is idempotent and prints hashes. The files used for this report were:
+The pipeline runs the validator automatically after generating every artifact. It checks expected CSV row counts, all 25 Dijkstra/A* cost agreements, all 125 admissible heuristic results, alpha-beta ratio invariance, required bonus fields and metadata, and the complete 17-plot manifest. It exits with an error if anything is missing or inconsistent. The validator can also be rerun independently with `python scripts/validate_outputs.py`.
+
+The data downloader is idempotent, verifies the official archives against fixed SHA-256 values, and extracts both files by default. It stops on a checksum mismatch instead of running experiments on damaged or unexpected input. The files used for this report were:
 
 | File | Compressed bytes | SHA-256 |
 |---|---:|---|
@@ -245,16 +249,16 @@ Exact machine-dependent times will vary. Operation counts and optimal costs are 
 
 | Graph size | Algorithm | Mean native cost | Mean distance (m) | Mean vertices explored | Mean edges examined | Mean time (ms) |
 |---:|---|---:|---:|---:|---:|---:|
-| 1,000 | Dijkstra | 34,416.4 | 3,441.64 | 764.4 | 1,924.8 | 0.525 |
-| 1,000 | A* | 34,416.4 | 3,441.64 | 170.2 | 445.0 | 0.183 |
-| 5,000 | Dijkstra | 138,648.8 | 13,864.88 | 4,531.0 | 11,086.6 | 3.709 |
-| 5,000 | A* | 138,648.8 | 13,864.88 | 1,257.2 | 3,132.6 | 1.443 |
-| 10,000 | Dijkstra | 241,135.6 | 24,113.56 | 8,626.8 | 20,814.4 | 6.462 |
-| 10,000 | A* | 241,135.6 | 24,113.56 | 4,297.2 | 10,630.0 | 4.865 |
-| 25,000 | Dijkstra | 316,543.2 | 31,654.32 | 20,878.8 | 52,167.4 | 29.842 |
-| 25,000 | A* | 316,543.2 | 31,654.32 | 8,962.4 | 22,695.0 | 29.613 |
-| 50,000 | Dijkstra | 482,078.2 | 48,207.82 | 46,075.8 | 120,559.8 | 103.634 |
-| 50,000 | A* | 482,078.2 | 48,207.82 | 25,784.2 | 67,842.6 | 81.859 |
+| 1,000 | Dijkstra | 34,416.4 | 3,441.64 | 764.4 | 1,924.8 | 0.529 |
+| 1,000 | A* | 34,416.4 | 3,441.64 | 170.2 | 445.0 | 0.243 |
+| 5,000 | Dijkstra | 138,648.8 | 13,864.88 | 4,531.0 | 11,086.6 | 3.854 |
+| 5,000 | A* | 138,648.8 | 13,864.88 | 1,257.2 | 3,132.6 | 1.770 |
+| 10,000 | Dijkstra | 241,135.6 | 24,113.56 | 8,626.8 | 20,814.4 | 6.894 |
+| 10,000 | A* | 241,135.6 | 24,113.56 | 4,297.2 | 10,630.0 | 5.470 |
+| 25,000 | Dijkstra | 316,543.2 | 31,654.32 | 20,878.8 | 52,167.4 | 26.142 |
+| 25,000 | A* | 316,543.2 | 31,654.32 | 8,962.4 | 22,695.0 | 22.283 |
+| 50,000 | Dijkstra | 482,078.2 | 48,207.82 | 46,075.8 | 120,559.8 | 94.591 |
+| 50,000 | A* | 482,078.2 | 48,207.82 | 25,784.2 | 67,842.6 | 88.879 |
 
 Full precision is preserved in [`summary_results.csv`](results/tables/summary_results.csv), and individual queries are in [`raw_results.csv`](results/tables/raw_results.csv).
 
@@ -264,56 +268,56 @@ This is the full set of 50 reported algorithm runs: five graph sizes, five queri
 
 | Size | Query | Official source -> destination | Algorithm | Distance (m) | Path vertices | Explored | Edges | Time (ms) |
 |---:|:---:|---|---|---:|---:|---:|---:|---:|
-| 1,000 | Q1 | 1 -> 3543 | Dijkstra | 3,637.9 | 29 | 836 | 2,108 | 0.567 |
-| 1,000 | Q1 | 1 -> 3543 | A* | 3,637.9 | 29 | 180 | 467 | 0.197 |
-| 1,000 | Q2 | 1280 -> 2990 | Dijkstra | 2,727.8 | 23 | 653 | 1,678 | 0.456 |
-| 1,000 | Q2 | 1280 -> 2990 | A* | 2,727.8 | 23 | 83 | 221 | 0.094 |
-| 1,000 | Q3 | 1279 -> 712 | Dijkstra | 3,723.3 | 37 | 864 | 2,156 | 0.601 |
-| 1,000 | Q3 | 1279 -> 712 | A* | 3,723.3 | 37 | 125 | 329 | 0.139 |
-| 1,000 | Q4 | 1384 -> 3460 | Dijkstra | 4,488.9 | 32 | 924 | 2,281 | 0.622 |
-| 1,000 | Q4 | 1384 -> 3460 | A* | 4,488.9 | 32 | 262 | 695 | 0.289 |
-| 1,000 | Q5 | 1395 -> 1298 | Dijkstra | 2,630.3 | 20 | 545 | 1,401 | 0.377 |
-| 1,000 | Q5 | 1395 -> 1298 | A* | 2,630.3 | 20 | 201 | 513 | 0.198 |
-| 5,000 | Q1 | 1 -> 1645 | Dijkstra | 12,660.5 | 77 | 4,354 | 10,692 | 2.932 |
-| 5,000 | Q1 | 1 -> 1645 | A* | 12,660.5 | 77 | 2,781 | 7,126 | 3.144 |
-| 5,000 | Q2 | 1398 -> 261098 | Dijkstra | 16,786.9 | 74 | 4,909 | 11,948 | 4.074 |
-| 5,000 | Q2 | 1398 -> 261098 | A* | 16,786.9 | 74 | 824 | 2,067 | 0.994 |
-| 5,000 | Q3 | 6382 -> 262985 | Dijkstra | 13,902.9 | 70 | 4,660 | 11,383 | 4.719 |
-| 5,000 | Q3 | 6382 -> 262985 | A* | 13,902.9 | 70 | 1,056 | 2,506 | 1.246 |
-| 5,000 | Q4 | 7 -> 260752 | Dijkstra | 11,017.8 | 56 | 4,119 | 10,136 | 3.324 |
-| 5,000 | Q4 | 7 -> 260752 | A* | 11,017.8 | 56 | 457 | 1,064 | 0.499 |
-| 5,000 | Q5 | 1489 -> 260746 | Dijkstra | 14,956.3 | 91 | 4,613 | 11,274 | 3.495 |
-| 5,000 | Q5 | 1489 -> 260746 | A* | 14,956.3 | 91 | 1,168 | 2,900 | 1.334 |
-| 10,000 | Q1 | 1 -> 244307 | Dijkstra | 25,394.7 | 110 | 9,368 | 22,551 | 6.666 |
-| 10,000 | Q1 | 1 -> 244307 | A* | 25,394.7 | 110 | 4,956 | 12,195 | 5.363 |
-| 10,000 | Q2 | 6382 -> 258544 | Dijkstra | 24,833.3 | 108 | 9,351 | 22,511 | 6.785 |
-| 10,000 | Q2 | 6382 -> 258544 | A* | 24,833.3 | 108 | 6,039 | 14,975 | 7.358 |
-| 10,000 | Q3 | 1489 -> 262713 | Dijkstra | 23,672.0 | 134 | 8,539 | 20,632 | 6.230 |
-| 10,000 | Q3 | 1489 -> 262713 | A* | 23,672.0 | 134 | 2,756 | 6,677 | 2.861 |
-| 10,000 | Q4 | 1348 -> 262367 | Dijkstra | 29,382.2 | 146 | 9,908 | 23,770 | 8.296 |
-| 10,000 | Q4 | 1348 -> 262367 | A* | 29,382.2 | 146 | 4,584 | 11,160 | 5.269 |
-| 10,000 | Q5 | 3546 -> 5306 | Dijkstra | 17,285.6 | 133 | 5,968 | 14,608 | 4.332 |
-| 10,000 | Q5 | 3546 -> 5306 | A* | 17,285.6 | 133 | 3,151 | 8,143 | 3.473 |
-| 25,000 | Q1 | 1 -> 254333 | Dijkstra | 29,811.4 | 212 | 18,342 | 45,853 | 20.094 |
-| 25,000 | Q1 | 1 -> 254333 | A* | 29,811.4 | 212 | 7,356 | 18,931 | 10.626 |
-| 25,000 | Q2 | 728 -> 239328 | Dijkstra | 34,683.8 | 202 | 24,268 | 60,508 | 24.038 |
-| 25,000 | Q2 | 728 -> 239328 | A* | 34,683.8 | 202 | 9,383 | 22,889 | 12.134 |
-| 25,000 | Q3 | 648 -> 242438 | Dijkstra | 31,890.1 | 146 | 23,020 | 57,448 | 33.110 |
-| 25,000 | Q3 | 648 -> 242438 | A* | 31,890.1 | 146 | 9,871 | 25,440 | 73.673 |
-| 25,000 | Q4 | 6175 -> 241331 | Dijkstra | 37,612.6 | 181 | 23,664 | 58,893 | 42.881 |
-| 25,000 | Q4 | 6175 -> 241331 | A* | 37,612.6 | 181 | 12,032 | 30,338 | 33.887 |
-| 25,000 | Q5 | 2026 -> 246841 | Dijkstra | 24,273.7 | 226 | 15,100 | 38,135 | 29.088 |
-| 25,000 | Q5 | 2026 -> 246841 | A* | 24,273.7 | 226 | 6,170 | 15,877 | 17.747 |
-| 50,000 | Q1 | 1 -> 34669 | Dijkstra | 53,089.8 | 283 | 46,726 | 122,205 | 92.627 |
-| 50,000 | Q1 | 1 -> 34669 | A* | 53,089.8 | 283 | 30,633 | 79,936 | 95.614 |
-| 50,000 | Q2 | 648 -> 9095 | Dijkstra | 50,703.3 | 235 | 47,396 | 123,680 | 90.171 |
-| 50,000 | Q2 | 648 -> 9095 | A* | 50,703.3 | 235 | 25,011 | 63,496 | 75.117 |
-| 50,000 | Q3 | 2026 -> 10385 | Dijkstra | 47,852.6 | 356 | 46,609 | 121,867 | 139.873 |
-| 50,000 | Q3 | 2026 -> 10385 | A* | 47,852.6 | 356 | 28,392 | 75,342 | 95.040 |
-| 50,000 | Q4 | 2069 -> 13771 | Dijkstra | 47,023.1 | 373 | 47,036 | 122,972 | 100.308 |
-| 50,000 | Q4 | 2069 -> 13771 | A* | 47,023.1 | 373 | 27,557 | 76,117 | 89.383 |
-| 50,000 | Q5 | 1643 -> 229854 | Dijkstra | 42,370.3 | 298 | 42,612 | 112,075 | 95.193 |
-| 50,000 | Q5 | 1643 -> 229854 | A* | 42,370.3 | 298 | 17,328 | 44,322 | 54.138 |
+| 1,000 | Q1 | 1 -> 3543 | Dijkstra | 3,637.9 | 29 | 836 | 2,108 | 0.583 |
+| 1,000 | Q1 | 1 -> 3543 | A* | 3,637.9 | 29 | 180 | 467 | 0.260 |
+| 1,000 | Q2 | 1280 -> 2990 | Dijkstra | 2,727.8 | 23 | 653 | 1,678 | 0.479 |
+| 1,000 | Q2 | 1280 -> 2990 | A* | 2,727.8 | 23 | 83 | 221 | 0.102 |
+| 1,000 | Q3 | 1279 -> 712 | Dijkstra | 3,723.3 | 37 | 864 | 2,156 | 0.567 |
+| 1,000 | Q3 | 1279 -> 712 | A* | 3,723.3 | 37 | 125 | 329 | 0.150 |
+| 1,000 | Q4 | 1384 -> 3460 | Dijkstra | 4,488.9 | 32 | 924 | 2,281 | 0.602 |
+| 1,000 | Q4 | 1384 -> 3460 | A* | 4,488.9 | 32 | 262 | 695 | 0.475 |
+| 1,000 | Q5 | 1395 -> 1298 | Dijkstra | 2,630.3 | 20 | 545 | 1,401 | 0.413 |
+| 1,000 | Q5 | 1395 -> 1298 | A* | 2,630.3 | 20 | 201 | 513 | 0.228 |
+| 5,000 | Q1 | 1 -> 1645 | Dijkstra | 12,660.5 | 77 | 4,354 | 10,692 | 4.187 |
+| 5,000 | Q1 | 1 -> 1645 | A* | 12,660.5 | 77 | 2,781 | 7,126 | 4.741 |
+| 5,000 | Q2 | 1398 -> 261098 | Dijkstra | 16,786.9 | 74 | 4,909 | 11,948 | 5.244 |
+| 5,000 | Q2 | 1398 -> 261098 | A* | 16,786.9 | 74 | 824 | 2,067 | 1.035 |
+| 5,000 | Q3 | 6382 -> 262985 | Dijkstra | 13,902.9 | 70 | 4,660 | 11,383 | 3.564 |
+| 5,000 | Q3 | 6382 -> 262985 | A* | 13,902.9 | 70 | 1,056 | 2,506 | 1.201 |
+| 5,000 | Q4 | 7 -> 260752 | Dijkstra | 11,017.8 | 56 | 4,119 | 10,136 | 3.023 |
+| 5,000 | Q4 | 7 -> 260752 | A* | 11,017.8 | 56 | 457 | 1,064 | 0.498 |
+| 5,000 | Q5 | 1489 -> 260746 | Dijkstra | 14,956.3 | 91 | 4,613 | 11,274 | 3.252 |
+| 5,000 | Q5 | 1489 -> 260746 | A* | 14,956.3 | 91 | 1,168 | 2,900 | 1.373 |
+| 10,000 | Q1 | 1 -> 244307 | Dijkstra | 25,394.7 | 110 | 9,368 | 22,551 | 7.444 |
+| 10,000 | Q1 | 1 -> 244307 | A* | 25,394.7 | 110 | 4,956 | 12,195 | 6.167 |
+| 10,000 | Q2 | 6382 -> 258544 | Dijkstra | 24,833.3 | 108 | 9,351 | 22,511 | 6.483 |
+| 10,000 | Q2 | 6382 -> 258544 | A* | 24,833.3 | 108 | 6,039 | 14,975 | 7.464 |
+| 10,000 | Q3 | 1489 -> 262713 | Dijkstra | 23,672.0 | 134 | 8,539 | 20,632 | 7.517 |
+| 10,000 | Q3 | 1489 -> 262713 | A* | 23,672.0 | 134 | 2,756 | 6,677 | 3.284 |
+| 10,000 | Q4 | 1348 -> 262367 | Dijkstra | 29,382.2 | 146 | 9,908 | 23,770 | 8.346 |
+| 10,000 | Q4 | 1348 -> 262367 | A* | 29,382.2 | 146 | 4,584 | 11,160 | 5.799 |
+| 10,000 | Q5 | 3546 -> 5306 | Dijkstra | 17,285.6 | 133 | 5,968 | 14,608 | 4.679 |
+| 10,000 | Q5 | 3546 -> 5306 | A* | 17,285.6 | 133 | 3,151 | 8,143 | 4.633 |
+| 25,000 | Q1 | 1 -> 254333 | Dijkstra | 29,811.4 | 212 | 18,342 | 45,853 | 17.560 |
+| 25,000 | Q1 | 1 -> 254333 | A* | 29,811.4 | 212 | 7,356 | 18,931 | 10.691 |
+| 25,000 | Q2 | 728 -> 239328 | Dijkstra | 34,683.8 | 202 | 24,268 | 60,508 | 22.359 |
+| 25,000 | Q2 | 728 -> 239328 | A* | 34,683.8 | 202 | 9,383 | 22,889 | 13.017 |
+| 25,000 | Q3 | 648 -> 242438 | Dijkstra | 31,890.1 | 146 | 23,020 | 57,448 | 18.734 |
+| 25,000 | Q3 | 648 -> 242438 | A* | 31,890.1 | 146 | 9,871 | 25,440 | 30.123 |
+| 25,000 | Q4 | 6175 -> 241331 | Dijkstra | 37,612.6 | 181 | 23,664 | 58,893 | 43.392 |
+| 25,000 | Q4 | 6175 -> 241331 | A* | 37,612.6 | 181 | 12,032 | 30,338 | 38.401 |
+| 25,000 | Q5 | 2026 -> 246841 | Dijkstra | 24,273.7 | 226 | 15,100 | 38,135 | 28.667 |
+| 25,000 | Q5 | 2026 -> 246841 | A* | 24,273.7 | 226 | 6,170 | 15,877 | 19.183 |
+| 50,000 | Q1 | 1 -> 34669 | Dijkstra | 53,089.8 | 283 | 46,726 | 122,205 | 93.806 |
+| 50,000 | Q1 | 1 -> 34669 | A* | 53,089.8 | 283 | 30,633 | 79,936 | 105.383 |
+| 50,000 | Q2 | 648 -> 9095 | Dijkstra | 50,703.3 | 235 | 47,396 | 123,680 | 92.857 |
+| 50,000 | Q2 | 648 -> 9095 | A* | 50,703.3 | 235 | 25,011 | 63,496 | 80.241 |
+| 50,000 | Q3 | 2026 -> 10385 | Dijkstra | 47,852.6 | 356 | 46,609 | 121,867 | 93.580 |
+| 50,000 | Q3 | 2026 -> 10385 | A* | 47,852.6 | 356 | 28,392 | 75,342 | 93.836 |
+| 50,000 | Q4 | 2069 -> 13771 | Dijkstra | 47,023.1 | 373 | 47,036 | 122,972 | 104.731 |
+| 50,000 | Q4 | 2069 -> 13771 | A* | 47,023.1 | 373 | 27,557 | 76,117 | 101.237 |
+| 50,000 | Q5 | 1643 -> 229854 | Dijkstra | 42,370.3 | 298 | 42,612 | 112,075 | 87.982 |
+| 50,000 | Q5 | 1643 -> 229854 | A* | 42,370.3 | 298 | 17,328 | 44,322 | 63.698 |
 
 How to read one pair: for the 50,000-vertex Q4 route, both algorithms found 47,023.1 m and a 373-vertex path. A* explored 27,557 vertices rather than 47,036 and examined 76,117 edges rather than 122,972. This is the same route selected for the bonus experiment because it was the longest path, by vertex count, among the five largest-graph benchmark queries.
 
@@ -321,11 +325,11 @@ How to read one pair: for the 50,000-vertex Q4 route, both algorithms found 47,0
 
 | Graph size | Fewer vertices | Fewer edges | Faster runtime |
 |---:|---:|---:|---:|
-| 1,000 | 77.73% | 76.88% | 65.03% |
-| 5,000 | 72.25% | 71.74% | 61.08% |
-| 10,000 | 50.19% | 48.93% | 24.71% |
-| 25,000 | 57.07% | 56.50% | 0.77% |
-| 50,000 | 44.04% | 43.73% | 21.01% |
+| 1,000 | 77.73% | 76.88% | 54.04% |
+| 5,000 | 72.25% | 71.74% | 54.09% |
+| 10,000 | 50.19% | 48.93% | 20.66% |
+| 25,000 | 57.07% | 56.50% | 14.76% |
+| 50,000 | 44.04% | 43.73% | 6.04% |
 
 With the heuristic expressed in the same native cost units as `g(v)`, A* substantially reduces the search space. It was faster at all sizes, although the 25,000-vertex mean was nearly tied because heuristic calculations have their own cost. The operation-count reductions are more portable than wall-clock timings and clearly show the benefit of destination guidance.
 
@@ -337,9 +341,9 @@ Each figure is generated directly from the machine-readable files in `results/ta
 
 ![Runtime comparison](results/plots/runtime_comparison.png)
 
-The horizontal axis is the number of vertices in the induced graph, and the vertical axis is mean search time in milliseconds. Both algorithms become slower as graph size and typical route span grow. Dijkstra increases from 0.525 ms at 1,000 vertices to 103.634 ms at 50,000 vertices. A* increases from 0.183 ms to 81.859 ms over the same range.
+The horizontal axis is the number of vertices in the induced graph, and the vertical axis is mean search time in milliseconds. Both algorithms become slower as graph size and typical route span grow. Dijkstra increases from 0.529 ms at 1,000 vertices to 94.591 ms at 50,000 vertices. A* increases from 0.243 ms to 88.879 ms over the same range.
 
-A* has the lower mean at every tested size. Its advantage is greatest on the 1,000- and 5,000-vertex graphs. At 25,000 vertices the lines almost meet: 29.842 ms for Dijkstra and 29.613 ms for A*. This does not mean that the algorithms performed the same amount of search work. A* explored 57.07% fewer vertices at that size, but coordinate projection and heuristic evaluation added computation per examined state. Wall-clock measurements are also sensitive to caching, scheduling, and the particular query sample, so operation counts should be considered alongside time.
+A* has the lower mean at every tested size. Its advantage is greatest on the 1,000- and 5,000-vertex graphs and narrowest at 50,000 vertices: 94.591 ms for Dijkstra and 88.879 ms for A*. This does not mean that the algorithms performed nearly the same amount of search work. A* explored 44.04% fewer vertices at that size, but coordinate projection and heuristic evaluation added computation per examined state. Wall-clock measurements are also sensitive to caching, scheduling, and the particular query sample, so operation counts should be considered alongside time.
 
 #### Figure 2 - Mean vertices explored
 
@@ -417,13 +421,13 @@ The percentages below are calculated independently at each graph size relative t
 | Lambda | Heuristic mode | Vertices (% of zero) | Edges (% of zero) | Runtime (% of zero) | Optimal queries | Maximum cost gap |
 |---:|---|---:|---:|---:|---:|---:|
 | 0.00 | Zero heuristic | 100.00% | 100.00% | 100.00% | 25/25 | 0.000% |
-| 0.25 | Weakened admissible | 86.72% | 87.19% | 108.35% | 25/25 | 0.000% |
-| 0.50 | Weakened admissible | 71.38% | 71.96% | 107.34% | 25/25 | 0.000% |
-| 0.75 | Weakened admissible | 55.91% | 56.43% | 96.80% | 25/25 | 0.000% |
-| 1.00 | Standard A* | 39.74% | 40.44% | 60.77% | 25/25 | 0.000% |
-| 1.25 | Weighted A* | 22.29% | 23.03% | 36.39% | 13/25 | 3.689% |
-| 1.50 | Weighted A* | 45.75% | 50.60% | 72.94% | 3/25 | 10.876% |
-| 2.00 | Weighted A* | 29.53% | 30.75% | 45.52% | 2/25 | 18.024% |
+| 0.25 | Weakened admissible | 86.72% | 87.19% | 144.21% | 25/25 | 0.000% |
+| 0.50 | Weakened admissible | 71.38% | 71.96% | 101.48% | 25/25 | 0.000% |
+| 0.75 | Weakened admissible | 55.91% | 56.43% | 72.91% | 25/25 | 0.000% |
+| 1.00 | Standard A* | 39.74% | 40.44% | 64.93% | 25/25 | 0.000% |
+| 1.25 | Weighted A* | 22.29% | 23.03% | 32.62% | 13/25 | 3.689% |
+| 1.50 | Weighted A* | 45.75% | 50.60% | 68.91% | 3/25 | 10.876% |
+| 2.00 | Weighted A* | 29.53% | 30.75% | 42.96% | 2/25 | 18.024% |
 
 #### Figure 9 - Search work versus heuristic strength
 
@@ -437,9 +441,9 @@ The shaded region is weighted A*. It can be extremely aggressive, but stronger i
 
 ![Heuristic strength and runtime](results/plots/heuristic_strength_runtime.png)
 
-Runtime is noisier than operation counts. Weak settings such as `lambda=0.25` and `lambda=0.5` reduced search work without reducing mean normalized time because heuristic computation has a fixed cost and the saved work was too small. Standard A* averaged 60.77% of zero-heuristic runtime across sizes. It is the best tested setting that preserves the exact shortest-path guarantee.
+Runtime is noisier than operation counts. Weak settings such as `lambda=0.25` and `lambda=0.5` reduced search work without reducing mean normalized time because heuristic computation has a fixed cost and the saved work was too small. Standard A* averaged 64.93% of zero-heuristic runtime across sizes. It is the best tested setting that preserves the exact shortest-path guarantee.
 
-Weighted `lambda=1.25` was faster on this aggregate measure, at 36.39% of zero-heuristic runtime, but it returned an optimal route for only 13 of 25 queries. The apparent speed gain is therefore not a like-for-like exact shortest-path result. The non-monotonic values at `1.5` and `2.0` also show that greedier search does not produce a monotonic speedup.
+Weighted `lambda=1.25` was faster on this aggregate measure, at 32.62% of zero-heuristic runtime, but it returned an optimal route for only 13 of 25 queries. The apparent speed gain is therefore not a like-for-like exact shortest-path result. The non-monotonic values at `1.5` and `2.0` also show that greedier search does not produce a monotonic speedup.
 
 #### Figure 11 - Efficiency and optimality tradeoff
 
@@ -650,7 +654,7 @@ Dijkstra uses only `g(v)`, the known distance from the source, and therefore exp
 
 ### Q5. How does time vary with graph size?
 
-Mean runtime generally increased with graph size and route span. Dijkstra rose from 0.525 ms at 1,000 vertices to 103.634 ms at 50,000 vertices, while A* rose from 0.183 ms to 81.859 ms. This increase is expected because larger searches can settle more vertices, scan more arcs, and perform more heap operations.
+Mean runtime generally increased with graph size and route span. Dijkstra rose from 0.529 ms at 1,000 vertices to 94.591 ms at 50,000 vertices, while A* rose from 0.243 ms to 88.879 ms. This increase is expected because larger searches can settle more vertices, scan more arcs, and perform more heap operations.
 
 The growth is not a simple constant multiple of `V`. Runtime depends on the portion of the graph needed to reach the destination, average degree in that region, heap duplicates created by improved tentative distances, memory-cache behavior, and operating-system scheduling. The per-query graph shows meaningful variation even within a fixed size. A* was faster on the mean at every size, but its advantage narrowed at 25,000 vertices because heuristic computation offset much of the saved search work in those five queries.
 
