@@ -372,6 +372,98 @@ def generate_dynamic_analysis_plots(
     return outputs
 
 
+def generate_dynamic_parameter_study_plots(
+    bonus_dir: str | Path,
+    plots_dir: str | Path | None = None,
+) -> list[Path]:
+    """Visualize route sensitivity to the alpha and beta cost weights."""
+
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise RuntimeError("Install dependencies with: pip install -r requirements.txt") from exc
+
+    bonus = Path(bonus_dir)
+    plots = Path(plots_dir) if plots_dir is not None else bonus
+    plots.mkdir(parents=True, exist_ok=True)
+    with (bonus / "dynamic_parameter_study.csv").open(newline="", encoding="utf-8") as stream:
+        rows = list(csv.DictReader(stream))
+    outputs: list[Path] = []
+
+    alpha_one = sorted(
+        (row for row in rows if float(row["alpha"]) == 1.0),
+        key=lambda row: float(row["beta"]),
+    )
+    betas = [float(row["beta"]) for row in alpha_one]
+    positions = list(range(len(betas)))
+    distance_km = [float(row["physical_distance_meters"]) / 1000.0 for row in alpha_one]
+    used = [int(row["congested_edges_used"]) for row in alpha_one]
+    avoided = [int(row["congested_edges_avoided"]) for row in alpha_one]
+    fig, (ax_distance, ax_edges) = plt.subplots(1, 2, figsize=(12, 5), dpi=170)
+    ax_distance.plot(positions, distance_km, marker="o", linewidth=2.2, color="#00798C")
+    for x_value, y_value, row in zip(positions, distance_km, alpha_one):
+        ax_distance.annotate(row["route_id"], (x_value, y_value), xytext=(0, 7),
+                             textcoords="offset points", ha="center", fontsize=8)
+    ax_distance.set_xticks(positions, [f"{beta:g}" for beta in betas])
+    ax_distance.set_xlabel("Beta (alpha fixed at 1)")
+    ax_distance.set_ylabel("Selected route distance (km)")
+    ax_distance.set_title("Route and physical-distance response")
+    ax_distance.grid(alpha=0.22)
+
+    ax_edges.bar(positions, avoided, color="#00798C", label="Avoided")
+    ax_edges.bar(positions, used, bottom=avoided, color="#D1495B", label="Still used")
+    ax_edges.set_xticks(positions, [f"{beta:g}" for beta in betas])
+    ax_edges.set_xlabel("Beta (alpha fixed at 1)")
+    ax_edges.set_ylabel("Selected congested edges")
+    ax_edges.set_title("Congestion avoidance response")
+    ax_edges.grid(axis="y", alpha=0.22)
+    ax_edges.legend()
+    fig.suptitle("Dynamic-cost sensitivity as congestion importance increases", fontsize=14)
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    path = plots / "dynamic_parameter_sensitivity.png"
+    fig.savefig(path)
+    plt.close(fig)
+    outputs.append(path)
+
+    alpha_values = sorted({float(row["alpha"]) for row in rows})
+    beta_values = sorted({float(row["beta"]) for row in rows})
+    by_key = {(float(row["alpha"]), float(row["beta"])): row for row in rows}
+    used_matrix = [
+        [int(by_key[(alpha, beta)]["congested_edges_used"]) for beta in beta_values]
+        for alpha in alpha_values
+    ]
+    savings_matrix = [
+        [float(by_key[(alpha, beta)]["dynamic_savings_percent"]) for beta in beta_values]
+        for alpha in alpha_values
+    ]
+    fig, (ax_used, ax_savings) = plt.subplots(1, 2, figsize=(14, 4.8), dpi=170)
+    image_used = ax_used.imshow(used_matrix, cmap="YlOrRd", aspect="auto", vmin=0, vmax=124)
+    image_savings = ax_savings.imshow(savings_matrix, cmap="YlGnBu", aspect="auto", vmin=0)
+    for row_index, alpha in enumerate(alpha_values):
+        for column_index, beta in enumerate(beta_values):
+            row = by_key[(alpha, beta)]
+            ax_used.text(column_index, row_index, f"{row['congested_edges_used']}\n{row['route_id']}",
+                         ha="center", va="center", fontsize=7)
+            ax_savings.text(column_index, row_index, f"{float(row['dynamic_savings_percent']):.1f}%",
+                            ha="center", va="center", fontsize=7)
+    for axis in (ax_used, ax_savings):
+        axis.set_xticks(range(len(beta_values)), [f"{beta:g}" for beta in beta_values])
+        axis.set_yticks(range(len(alpha_values)), [f"{alpha:g}" for alpha in alpha_values])
+        axis.set_xlabel("Beta")
+        axis.set_ylabel("Alpha")
+    ax_used.set_title("Congested edges still used and route ID")
+    ax_savings.set_title("Dynamic-cost saving versus staying")
+    fig.colorbar(image_used, ax=ax_used, label="Congested edges used", shrink=0.82)
+    fig.colorbar(image_savings, ax=ax_savings, label="Saving (%)", shrink=0.82)
+    fig.suptitle("Alpha-beta sensitivity: relative weighting controls route choice", fontsize=14)
+    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    path = plots / "dynamic_alpha_beta_heatmap.png"
+    fig.savefig(path)
+    plt.close(fig)
+    outputs.append(path)
+    return outputs
+
+
 def generate_heuristic_study_plots(
     tables_dir: str | Path,
     plots_dir: str | Path | None = None,

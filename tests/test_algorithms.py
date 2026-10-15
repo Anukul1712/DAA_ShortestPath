@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from shortest_path.algorithms import astar, dijkstra
-from shortest_path.experiments import run_dynamic_experiment
+from shortest_path.experiments import run_dynamic_experiment, run_dynamic_parameter_study
 from shortest_path.graph import Edge, RoadGraph
 
 
@@ -79,6 +79,29 @@ class AlgorithmTests(unittest.TestCase):
         self.assertEqual(report["rerouted_dynamic_cost"], 6)
         self.assertEqual(report["congested_edges_avoided"], 2)
         self.assertEqual(report["congested_edges_used_by_reroute"], 0)
+
+    def test_dynamic_parameter_study_depends_on_beta_alpha_ratio(self):
+        adjacency = [
+            [],
+            [Edge(2, 1)],
+            [Edge(3, 1), Edge(6, 2)],
+            [Edge(4, 1)],
+            [Edge(5, 1)],
+            [],
+            [Edge(4, 2)],
+        ]
+        graph = RoadGraph(adjacency, [None] * 7, "parameter-fixture")
+        with tempfile.TemporaryDirectory() as directory:
+            rows = run_dynamic_parameter_study(
+                graph, 1, 5, Path(directory), alphas=(1.0, 2.0), betas=(0.5, 1.0)
+            )
+        by_key = {(row["alpha"], row["beta"]): row for row in rows}
+        first = by_key[(1.0, 0.5)]
+        scaled = by_key[(2.0, 1.0)]
+        self.assertEqual(first["beta_alpha_ratio"], scaled["beta_alpha_ratio"])
+        self.assertEqual(first["route_id"], scaled["route_id"])
+        self.assertEqual(first["physical_distance_meters"], scaled["physical_distance_meters"])
+        self.assertEqual(first["congested_edges_used"], scaled["congested_edges_used"])
 
 
 if __name__ == "__main__":

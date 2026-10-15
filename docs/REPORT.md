@@ -45,7 +45,7 @@ The study establishes why `lambda=1` is the preferred configuration: it is the s
 
 ## Bonus result
 
-The middle 124 arcs of one original route received a 5x simulated congestion cost. Staying on that route would raise its objective from 47,023.1 m to 106,790.7 m-equivalent. Recalculation changed the route from 373 to 388 vertices and increased physical distance to 47,747.8 m (+1.54%), but it avoided all 124 penalized arcs and reduced dynamic cost by 55.29% versus staying. The main README provides the complete metric table and four explained bonus figures.
+The middle 124 arcs of one original route received a simulated congestion cost. A 24-scenario study varied `alpha` over 0.5, 1, and 2 and `beta` over eight values from 0 through 2, producing four distinct optimal routes. It confirms that route selection depends on `beta/alpha`: equivalent ratios return the same path. With `alpha=1, beta=1`, staying on the original route would raise its objective from 47,023.1 m to 106,790.7 m-equivalent. Recalculation increased physical distance to 47,747.8 m (+1.54%), avoided all 124 penalized arcs, and reduced dynamic cost by 55.29% versus staying. The main README provides both complete bonus tables and six explained bonus figures.
 
 ## Limitations
 

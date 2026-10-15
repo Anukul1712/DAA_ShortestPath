@@ -10,7 +10,7 @@ This repository is a complete, reproducible solution to the problem statement in
 - Correctness: Dijkstra and A* returned the **same optimal cost in all 25 measured queries**.
 - Search work: A* examined 44.04%-77.73% fewer vertices across the tested sizes.
 - Runtime: A* was faster at every tested size after its heuristic was calibrated in the dataset's native distance units.
-- Bonus: applying 5x cost to 124 arcs made staying on the original route cost **106.79 km-equivalent**. The recomputed route avoided all 124 arcs, travelled **47.75 km**, and reduced the dynamic objective by **55.29%** versus staying.
+- Bonus: 24 alpha-beta scenarios produced four distinct optimal routes. At the main 5x setting, rerouting avoided all 124 affected arcs and reduced the dynamic objective by **55.29%** versus staying.
 
 ## Repository map
 
@@ -34,7 +34,7 @@ This repository is a complete, reproducible solution to the problem statement in
 |   |-- dimacs.py                   streaming .gr/.co/.gz parser
 |   |-- algorithms.py               Dijkstra, A*, metrics, path reconstruction
 |   |-- experiments.py              sampling, benchmarks, CSV/JSON, bonus
-|   |-- visualization.py            fifteen result plots
+|   |-- visualization.py            seventeen result plots
 |   `-- cli.py                      query/stats/benchmark/dynamic CLI
 |-- tests/                           parser, correctness, and edge-case tests
 `-- results/
@@ -75,7 +75,7 @@ Optional: `python -m pip install -e .` installs the package in editable mode and
 Expected final pipeline message:
 
 ```text
-Wrote 50 raw rows, 10 summary rows, and 15 plots under .../results
+Wrote 50 raw rows, 10 summary rows, and 17 plots under .../results
 ```
 
 The data downloader is idempotent and prints hashes. The files used for this report were:
@@ -534,6 +534,88 @@ The horizontal axis is edge position along the original route, not geographic di
 
 This plot verifies that the code applied the model where intended and did not globally inflate the network. It also shows why different edges produce different absolute penalties: all are multiplied by the same factor, but their original lengths differ.
 
+### Alpha-beta sensitivity study
+
+A single parameter choice proves that dynamic routing works, but it does not show how sensitive the decision is. Therefore the same source, destination, original route, and 124 congested edges were evaluated under 24 combinations:
+
+```text
+alpha in {0.5, 1, 2}
+beta  in {0, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2}
+```
+
+For a normal edge, `w'=alpha*d`. For a selected edge, `w'=(alpha+4*beta)*d`. Dividing both expressions by positive `alpha` does not change route ordering, so the effective congested-edge multiplier is
+
+```text
+M = (alpha + 4*beta) / alpha = 1 + 4*(beta/alpha)
+```
+
+This means the ratio `beta/alpha`, rather than either absolute number alone, controls the selected route. Scaling alpha and beta together multiplies all objective values by the same positive constant but leaves the optimum unchanged.
+
+Route IDs describe the four distinct paths observed:
+
+- `R0`: original 47,023.1 m path; all 124 selected edges remain.
+- `R1`: 47,142.3 m intermediate detour; 80 selected edges remain.
+- `R2`: 47,689.5 m near-complete detour; only 4 selected edges remain.
+- `R3`: 47,747.8 m complete detour; no selected edge remains.
+
+#### Complete 24-scenario bonus table
+
+`Saving` compares the selected route's dynamic objective with the dynamic cost of staying on `R0` under the same alpha and beta. `Extra distance` is always measured against the original physical distance, so it remains meaningful across differently scaled objectives.
+
+| Alpha | Beta | Beta/alpha | Effective multiplier | Route | Distance (m) | Extra distance | Congested edges used | Saving vs staying |
+|---:|---:|---:|---:|:---:|---:|---:|---:|---:|
+| 0.5 | 0 | 0.0000 | 1.00x | R0 | 47,023.1 | 0.00% | 124 | 0.00% |
+| 0.5 | 0.025 | 0.0500 | 1.20x | R2 | 47,689.5 | 1.42% | 4 | 4.55% |
+| 0.5 | 0.05 | 0.1000 | 1.40x | R3 | 47,747.8 | 1.54% | 0 | 9.91% |
+| 0.5 | 0.1 | 0.2000 | 1.80x | R3 | 47,747.8 | 1.54% | 0 | 19.04% |
+| 0.5 | 0.25 | 0.5000 | 3.00x | R3 | 47,747.8 | 1.54% | 0 | 37.91% |
+| 0.5 | 0.5 | 1.0000 | 5.00x | R3 | 47,747.8 | 1.54% | 0 | 55.29% |
+| 0.5 | 1 | 2.0000 | 9.00x | R3 | 47,747.8 | 1.54% | 0 | 71.33% |
+| 0.5 | 2 | 4.0000 | 17.00x | R3 | 47,747.8 | 1.54% | 0 | 83.31% |
+| 1 | 0 | 0.0000 | 1.00x | R0 | 47,023.1 | 0.00% | 124 | 0.00% |
+| 1 | 0.025 | 0.0250 | 1.10x | R2 | 47,689.5 | 1.42% | 4 | 1.66% |
+| 1 | 0.05 | 0.0500 | 1.20x | R2 | 47,689.5 | 1.42% | 4 | 4.55% |
+| 1 | 0.1 | 0.1000 | 1.40x | R3 | 47,747.8 | 1.54% | 0 | 9.91% |
+| 1 | 0.25 | 0.2500 | 2.00x | R3 | 47,747.8 | 1.54% | 0 | 22.94% |
+| 1 | 0.5 | 0.5000 | 3.00x | R3 | 47,747.8 | 1.54% | 0 | 37.91% |
+| 1 | 1 | 1.0000 | 5.00x | R3 | 47,747.8 | 1.54% | 0 | 55.29% |
+| 1 | 2 | 2.0000 | 9.00x | R3 | 47,747.8 | 1.54% | 0 | 71.33% |
+| 2 | 0 | 0.0000 | 1.00x | R0 | 47,023.1 | 0.00% | 124 | 0.00% |
+| 2 | 0.025 | 0.0125 | 1.05x | R1 | 47,142.3 | 0.25% | 80 | 0.58% |
+| 2 | 0.05 | 0.0250 | 1.10x | R2 | 47,689.5 | 1.42% | 4 | 1.66% |
+| 2 | 0.1 | 0.0500 | 1.20x | R2 | 47,689.5 | 1.42% | 4 | 4.55% |
+| 2 | 0.25 | 0.1250 | 1.50x | R3 | 47,747.8 | 1.54% | 0 | 12.38% |
+| 2 | 0.5 | 0.2500 | 2.00x | R3 | 47,747.8 | 1.54% | 0 | 22.94% |
+| 2 | 1 | 0.5000 | 3.00x | R3 | 47,747.8 | 1.54% | 0 | 37.91% |
+| 2 | 2 | 1.0000 | 5.00x | R3 | 47,747.8 | 1.54% | 0 | 55.29% |
+
+The table directly verifies ratio invariance. For example, `(alpha,beta)=(0.5,0.025)`, `(1,0.05)`, and `(2,0.1)` all have `beta/alpha=0.05`; all select `R2`, travel 47,689.5 m, use 4 congested edges, and save 4.55% versus staying.
+
+#### Figure 16 - Sensitivity with alpha fixed at one
+
+![Dynamic parameter sensitivity](results/plots/dynamic_parameter_sensitivity.png)
+
+The left panel shows stepwise route changes rather than a continuous geometric response. At `beta=0`, distance alone selects `R0`. At `beta=0.025`, the optimizer accepts 666.4 m of additional travel and switches to `R2`, leaving only 4 penalized edges. At `beta=0.1`, it accepts another 58.3 m and switches to `R3`, eliminating all 124 selected edges. Further beta increases do not change the route because `R3` already avoids the entire affected section.
+
+The right panel explains the same transitions through edge usage. The study does not claim that the exact mathematical threshold equals one of the sampled beta values. It establishes that, for `alpha=1`, the original-to-detour transition occurs by `beta=0.025`, and the transition to complete avoidance occurs after `beta=0.05` and by `beta=0.1`.
+
+#### Figure 17 - Alpha-beta response heatmaps
+
+![Alpha-beta sensitivity heatmap](results/plots/dynamic_alpha_beta_heatmap.png)
+
+Each heatmap cell is one complete shortest-path recomputation. The left cell annotation gives congested edges still used and the route ID. The right cell gives percentage saving relative to staying on `R0` under the same parameters. Moving right increases congestion importance and generally causes more avoidance and larger savings. Moving downward increases alpha, making distance more important relative to the same beta, so route changes occur later.
+
+The diagonal pattern is evidence for the ratio result. Settings with equal `beta/alpha` have the same effective multiplier and therefore identical paths and normalized savings. Absolute dynamic costs differ because of scaling, but physical distance, route identity, congested-edge use, and percentage saving remain the same.
+
+### What the parameter study establishes
+
+- Route choice is piecewise constant: a range of weights selects the same path, followed by a threshold where another path becomes cheaper.
+- Even a 10% effective penalty (`M=1.10`) changes the route substantially in this case.
+- Complete avoidance is observed at every tested setting with `beta/alpha >= 0.1`.
+- Increasing beta after complete avoidance raises the counterfactual cost of staying but cannot improve the already congestion-free route.
+- Alpha and beta are not independently identifiable for route selection in this proportional model; their ratio is the meaningful control parameter.
+- The original `alpha=1, beta=1` case is not a specially chosen threshold. It lies well inside the stable `R3` region and represents a clear high-congestion scenario.
+
 ### Bonus conclusion and practical interpretation
 
 The route changed because shortest paths depend on edge weights, not only graph topology. When a connected vehicle system receives a congestion, energy, weather, or risk update, it can retain the same road graph and run the algorithm again with the new weight function. In this measured case, recomputation found an exact minimum-cost route that travels 724.7 m farther but avoids every affected edge and saves 59.04 km-equivalent of live cost.
@@ -624,11 +706,12 @@ The test suite covers:
 - zero-heuristic A* equivalence to Dijkstra search work;
 - rejection of invalid negative heuristic weights.
 - dynamic-cost distance, penalty, rerouting, and avoidance metrics.
+- alpha-beta ratio invariance in the dynamic parameter study.
 
 Last local result:
 
 ```text
-Ran 10 tests ... OK
+Ran 11 tests ... OK
 ```
 
 The real-data pipeline adds 25 cross-algorithm cost assertions. The final generated artifacts are:
@@ -643,6 +726,8 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`heuristic_study_summary.csv`](results/tables/heuristic_study_summary.csv) | parameter results summarized by size and weight |
 | [`heuristic_study_metadata.json`](results/tables/heuristic_study_metadata.json) | weights, seed, sizes, and timing repetitions |
 | [`dynamic_result.json`](results/bonus/dynamic_result.json) | bonus parameters and both complete routes |
+| [`dynamic_parameter_study.csv`](results/bonus/dynamic_parameter_study.csv) | all 24 alpha-beta scenarios and derived metrics |
+| [`dynamic_parameter_study_metadata.json`](results/bonus/dynamic_parameter_study_metadata.json) | parameter grid and study interpretation |
 | [`runtime_comparison.png`](results/plots/runtime_comparison.png) | timing plot |
 | [`vertices_explored.png`](results/plots/vertices_explored.png) | vertex-work plot |
 | [`edges_examined.png`](results/plots/edges_examined.png) | edge-work plot |
@@ -658,6 +743,8 @@ The real-data pipeline adds 25 cross-algorithm cost assertions. The final genera
 | [`dynamic_cost_comparison.png`](results/plots/dynamic_cost_comparison.png) | physical distance versus dynamic objective |
 | [`dynamic_route_overlap.png`](results/plots/dynamic_route_overlap.png) | shared edges, changed edges, and congestion avoidance |
 | [`dynamic_congestion_profile.png`](results/plots/dynamic_congestion_profile.png) | edge-by-edge penalty location on the original route |
+| [`dynamic_parameter_sensitivity.png`](results/plots/dynamic_parameter_sensitivity.png) | route and avoidance response as beta increases |
+| [`dynamic_alpha_beta_heatmap.png`](results/plots/dynamic_alpha_beta_heatmap.png) | complete alpha-beta response matrix |
 
 ## 10. Useful CLI commands
 

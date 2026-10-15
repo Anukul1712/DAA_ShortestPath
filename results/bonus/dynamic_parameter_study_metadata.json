@@ -1,0 +1,24 @@
+{
+  "source": 2069,
+  "destination": 13771,
+  "alphas": [
+    0.5,
+    1.0,
+    2.0
+  ],
+  "betas": [
+    0.0,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.0
+  ],
+  "congestion_cost_factor": 4.0,
+  "congested_edges": 124,
+  "scenario_count": 24,
+  "unique_routes": 4,
+  "interpretation": "route choice depends on beta/alpha; common scaling changes cost magnitude but not ordering"
+}

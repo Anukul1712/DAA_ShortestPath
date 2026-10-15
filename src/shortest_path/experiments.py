@@ -369,6 +369,97 @@ def run_dynamic_experiment(
     return report
 
 
+def run_dynamic_parameter_study(
+    graph: RoadGraph,
+    source: int,
+    destination: int,
+    output_dir: str | Path,
+    alphas: tuple[float, ...] = (0.5, 1.0, 2.0),
+    betas: tuple[float, ...] = (0.0, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0),
+    congestion_cost_factor: float = 4.0,
+) -> list[dict]:
+    """Study route sensitivity to distance and congestion weighting parameters."""
+
+    if not alphas or any(alpha <= 0 for alpha in alphas):
+        raise ValueError("alpha values must be a non-empty set of positive values")
+    if not betas or any(beta < 0 for beta in betas):
+        raise ValueError("beta values must be a non-empty set of non-negative values")
+    baseline = dijkstra(graph, source, destination)
+    if not baseline.reachable or len(baseline.path) < 4:
+        raise ValueError("dynamic parameter study needs a reachable path of at least four vertices")
+    first = len(baseline.path) // 3
+    last = max(first + 1, 2 * len(baseline.path) // 3)
+    congested = set(zip(baseline.path[first:last], baseline.path[first + 1:last + 1]))
+    baseline_edges = set(zip(baseline.path, baseline.path[1:]))
+
+    def path_base_cost(path: list[int]) -> float:
+        total = 0.0
+        for u, v in zip(path, path[1:]):
+            total += min(edge.weight for edge in graph.adjacency[u] if edge.to == v)
+        return total
+
+    scenarios = sorted(
+        ((alpha, beta) for alpha in alphas for beta in betas),
+        key=lambda item: (item[1] / item[0], item[0], item[1]),
+    )
+    route_ids: dict[tuple[int, ...], str] = {tuple(baseline.path): "R0"}
+    rows: list[dict] = []
+    for alpha, beta in scenarios:
+        def parameter_weight(u: int, edge: Edge) -> float:
+            congestion = congestion_cost_factor * edge.weight if (u, edge.to) in congested else 0.0
+            return alpha * edge.weight + beta * congestion
+
+        result = dijkstra(graph, source, destination, parameter_weight)
+        signature = tuple(result.path)
+        if signature not in route_ids:
+            route_ids[signature] = f"R{len(route_ids)}"
+        result_edges = set(zip(result.path, result.path[1:]))
+        physical_cost = path_base_cost(result.path)
+        old_route_dynamic_cost = alpha * baseline.cost + beta * congestion_cost_factor * sum(
+            min(edge.weight for edge in graph.adjacency[u] if edge.to == v)
+            for u, v in congested
+        )
+        rows.append({
+            "alpha": alpha,
+            "beta": beta,
+            "beta_alpha_ratio": beta / alpha,
+            "effective_congested_multiplier": 1.0 + congestion_cost_factor * beta / alpha,
+            "route_id": route_ids[signature],
+            "route_changed": result.path != baseline.path,
+            "physical_distance_meters": physical_cost * graph.weight_unit_meters,
+            "extra_distance_meters": (physical_cost - baseline.cost) * graph.weight_unit_meters,
+            "extra_distance_percent": 100.0 * (physical_cost - baseline.cost) / baseline.cost,
+            "dynamic_cost": result.cost,
+            "normalized_dynamic_cost": result.cost / alpha,
+            "old_route_dynamic_cost": old_route_dynamic_cost,
+            "normalized_old_route_dynamic_cost": old_route_dynamic_cost / alpha,
+            "dynamic_savings_percent": 100.0 * (old_route_dynamic_cost - result.cost) / old_route_dynamic_cost,
+            "path_vertices": len(result.path),
+            "congested_edges_used": len(congested & result_edges),
+            "congested_edges_avoided": len(congested - result_edges),
+            "shared_edges_with_original": len(baseline_edges & result_edges),
+            "vertices_explored": result.vertices_explored,
+            "edges_examined": result.edges_examined,
+        })
+
+    rows.sort(key=lambda row: (float(row["alpha"]), float(row["beta"])))
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    _write_csv(output / "dynamic_parameter_study.csv", rows)
+    (output / "dynamic_parameter_study_metadata.json").write_text(json.dumps({
+        "source": getattr(graph, "original_vertex_ids", [source])[source] if hasattr(graph, "original_vertex_ids") else source,
+        "destination": getattr(graph, "original_vertex_ids", [destination])[destination] if hasattr(graph, "original_vertex_ids") else destination,
+        "alphas": list(alphas),
+        "betas": list(betas),
+        "congestion_cost_factor": congestion_cost_factor,
+        "congested_edges": len(congested),
+        "scenario_count": len(rows),
+        "unique_routes": len(route_ids),
+        "interpretation": "route choice depends on beta/alpha; common scaling changes cost magnitude but not ordering",
+    }, indent=2), encoding="utf-8")
+    return rows
+
+
 def _write_csv(path: Path, rows: list[dict]) -> None:
     if not rows:
         return

@@ -29,10 +29,14 @@ This folder satisfies submission criteria 5 and 6 and separates machine-readable
 - `dynamic_cost_comparison.png` - physical route length compared with congestion-adjusted objective cost.
 - `dynamic_route_overlap.png` - shared/unique path edges and the number of congested edges avoided.
 - `dynamic_congestion_profile.png` - edge-by-edge normal and penalized costs along the original route.
+- `dynamic_parameter_sensitivity.png` - route distance and congestion avoidance across beta values.
+- `dynamic_alpha_beta_heatmap.png` - route IDs, affected-edge usage, and savings for all alpha-beta combinations.
 
 ## `bonus/`
 
 - `dynamic_result.json` - formula parameters, all selected congested edges, four cost comparisons, overlap metrics, savings, and complete original/new paths.
+- `dynamic_parameter_study.csv` - full results for 24 combinations of alpha and beta.
+- `dynamic_parameter_study_metadata.json` - tested grid, scenario count, route count, and interpretation.
 
 All artifacts are regenerated with:
 
