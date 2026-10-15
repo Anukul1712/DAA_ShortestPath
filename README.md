@@ -1,6 +1,6 @@
-# Shortest-Path Planning on a Large-Scale Mobility Network - Complete Solution
+# Shortest-Path Planning on a Large-Scale IoV/UAV Mobility Network
 
-This repository is a complete, reproducible solution to the problem statement in [PS_README.md](PS_README.md). It parses a real 264,346-vertex road network, constructs an adjacency list, implements Dijkstra and A* without graph-library shortest-path calls, benchmarks five graph sizes and five queries per size, reconstructs paths, handles unreachable destinations, generates plots, and completes the dynamic-edge-cost bonus.
+This repository is a complete, reproducible solution to the problem statement in [PS_README.md](PS_README.md) for the assignment in the DAA course (NMCC202). It parses a real 264,346-vertex road network, constructs an adjacency list, implements Dijkstra and A* without graph-library shortest-path calls, benchmarks five graph sizes and five queries per size, reconstructs paths, handles unreachable destinations, generates plots, and completes the dynamic-edge-cost bonus.
 
 ## Headline findings
 
